@@ -335,7 +335,7 @@ describe("EvolverClient", () => {
       },
       llmSnapshot: snapshot,
     });
-    const fetchMock = vi.fn().mockResolvedValue(loopResponse());
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(loopResponse()));
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new EvolverClient({
@@ -364,6 +364,27 @@ describe("EvolverClient", () => {
       "event-campaign-grant",
     );
     expect(init.body).not.toContain("not-forwarded");
+  });
+
+  it("replays an automatic E2 request with the same operation identity", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(loopResponse()));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new EvolverClient({ baseUrl: "http://evolver.test", token: "owner-token" });
+    const request = buildEventCampaignRequest({
+      eventSnapshotId: "11111111-1111-4111-8111-111111111111",
+      config: options().request.config,
+      llmSnapshot: snapshot,
+    });
+    const input = { request, idempotencyKey: "approval-operation-e2", credentialGrant: "grant" };
+
+    const first = await client.startEventCampaign(input);
+    const replay = await client.startEventCampaign(input);
+
+    expect(replay).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((fetchMock.mock.calls[0][1] as RequestInit).body).toBe(
+      (fetchMock.mock.calls[1][1] as RequestInit).body,
+    );
   });
 
   it("retries 502/504 with the same approval-derived operation ID", async () => {
