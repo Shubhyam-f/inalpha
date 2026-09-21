@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from difflib import unified_diff
 from hashlib import sha256
 
 from inalpha_shared_llm import LLMClient as SharedLLMClient  # type: ignore[import-untyped]
@@ -11,8 +12,8 @@ from inalpha_shared_llm.client import (  # type: ignore[import-untyped]
 )
 from inalpha_shared_llm.types import CacheMetrics, MutationRequest  # type: ignore[import-untyped]
 
-from ..exceptions import DiffApplyError, LLMError
-from .diff_applier import apply_diff
+from ..exceptions import DiffApplyError, LLMError, LoopControlError
+from .diff_applier import apply_diff, repair_hunk_counts
 from .prompt_templates import SYSTEM_PROMPT, build_user_prompt
 
 
@@ -43,6 +44,30 @@ def _clean_llm_diff(content: str) -> str:
         text = text[:end]
 
     return text.strip()
+
+
+def _full_source_fallback(content: str) -> str | None:
+    """提取模型误返的完整 Python 文件，交给既有沙盒继续严格审计。"""
+    text = content.strip()
+    if "```python" in text:
+        text = text.split("```python", 1)[1].split("```", 1)[0].strip()
+    elif text.startswith("```"):
+        text = "\n".join(text.splitlines()[1:-1]).strip()
+    if not text.startswith("class ") or "def on_bar(" not in text:
+        return None
+    return text + ("\n" if content.endswith("\n") else "")
+
+
+def _source_diff(original: str, replacement: str) -> str:
+    """把完整源码转换为单文件 canonical unified diff，保留统一血缘格式。"""
+    return "".join(
+        unified_diff(
+            original.splitlines(keepends=True),
+            replacement.splitlines(keepends=True),
+            fromfile="a/strategy.py",
+            tofile="b/strategy.py",
+        )
+    ).strip()
 
 
 @dataclass(slots=True)
@@ -123,12 +148,20 @@ class Mutator:
 
         try:
             response = await self.llm_client.mutate(request)
+        except LoopControlError:
+            raise
         except Exception as exc:
             raise LLMError(f"LLM 变异调用失败：{exc}") from exc
 
         raw_diff = _clean_llm_diff(response.content)
         metrics = response.cache_metrics
         llm_cost_usd = self._cost_usd(metrics)
+
+        # 部分模型违反格式约束返回完整源码；转成 canonical diff 后走同一审计链。
+        if not raw_diff or not raw_diff.startswith("---"):
+            full_source = _full_source_fallback(response.content)
+            if full_source is not None and full_source != current_source:
+                raw_diff = _source_diff(current_source, full_source)
 
         # 空 diff = LLM 认为无需改动
         if not raw_diff or not raw_diff.startswith("---"):
@@ -145,16 +178,21 @@ class Mutator:
         try:
             new_source = apply_diff(current_source, raw_diff, max_fuzz=self.max_fuzz)
         except DiffApplyError as exc:
-            # 带上 cost 信息，上层可决定是否计入成本
-            raise DiffApplyError(
-                str(exc),
-                original=current_source,
-                failed_diff=raw_diff,
-                llm_cost_usd=llm_cost_usd,
-                cache_hit_tokens=metrics.cache_read_tokens,
-                input_tokens=metrics.input_tokens,
-                output_tokens=metrics.output_tokens,
-            ) from exc
+            repaired_diff = repair_hunk_counts(raw_diff)
+            try:
+                new_source = apply_diff(current_source, repaired_diff, max_fuzz=self.max_fuzz)
+                raw_diff = repaired_diff
+            except DiffApplyError:
+                # 带上 cost 信息，上层可决定是否计入成本
+                raise DiffApplyError(
+                    str(exc),
+                    original=current_source,
+                    failed_diff=raw_diff,
+                    llm_cost_usd=llm_cost_usd,
+                    cache_hit_tokens=metrics.cache_read_tokens,
+                    input_tokens=metrics.input_tokens,
+                    output_tokens=metrics.output_tokens,
+                ) from exc
 
         return MutationResult(
             new_source=new_source,

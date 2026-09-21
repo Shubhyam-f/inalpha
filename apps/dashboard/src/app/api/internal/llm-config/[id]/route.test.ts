@@ -65,6 +65,29 @@ beforeEach(() => {
 });
 
 describe("internal owner LLM credential route", () => {
+  it("rejects a revoked loop before decrypting any model key", async () => {
+    mockedGetPool.mockReturnValue({ query: vi.fn().mockResolvedValue({ rowCount: 0 }) } as never);
+    const grant = await token({
+      loop_id: "11111111-1111-4111-8111-111111111111",
+      lease_token: "22222222-2222-4222-8222-222222222222",
+      loop_phase: "baseline", grant_purpose: "e1_run",
+    });
+    expect((await callRoute(`Bearer ${grant}`)).status).toBe(403);
+    expect(mockedDecryptUserApiKey).not.toHaveBeenCalled();
+  });
+
+  it("does not accept long-lived or cross-phase loop credentials", async () => {
+    const scope = {
+      loop_id: "11111111-1111-4111-8111-111111111111",
+      lease_token: "22222222-2222-4222-8222-222222222222",
+      loop_phase: "baseline", grant_purpose: "event_campaign",
+    };
+    expect((await callRoute(`Bearer ${await token(scope)}`)).status).toBe(403);
+    const now = Math.floor(Date.now() / 1000);
+    expect((await callRoute(`Bearer ${await token({ ...scope, grant_purpose: "e1_run" }, { issuedAt: now, expiresAt: now + 301 })}`)).status).toBe(403);
+    expect(mockedDecryptUserApiKey).not.toHaveBeenCalled();
+  });
+
   it("rejects missing authentication and mismatched credential scope", async () => {
     expect((await callRoute()).status).toBe(401);
     expect((await callRoute(`Bearer ${await token({ config_id: "config-2" })}`)).status).toBe(
@@ -115,6 +138,31 @@ describe("internal owner LLM credential route", () => {
     expect((await callRoute(`Bearer ${grant}`)).status).toBe(200);
     expect((await callRoute(`Bearer ${grant}`)).status).toBe(409);
     expect(mockedDecryptUserApiKey).toHaveBeenCalledTimes(3);
+  });
+
+  it("allows bounded campaign recovery redemptions for the grant lifetime", async () => {
+    const query = vi.fn().mockResolvedValue({ rowCount: 1 });
+    mockedGetPool.mockReturnValue({ query } as never);
+    mockedDecryptUserApiKey.mockResolvedValue({
+      id: "config-1",
+      provider: "deepseek",
+      api_key: "owner-key",
+    } as never);
+
+    expect(
+      (await callRoute(`Bearer ${await token({ grant_purpose: "event_campaign" })}`)).status,
+    ).toBe(200);
+    expect(query.mock.calls[0]?.[1]).toEqual([
+      "11111111-1111-4111-8111-111111111111",
+      "user:alice",
+      "config-1",
+      "operation-1",
+      "a".repeat(64),
+      "b".repeat(64),
+      "event_campaign",
+      8,
+      "30 hours",
+    ]);
   });
 
   it("rejects a reused jti whose recorded scope differs", async () => {

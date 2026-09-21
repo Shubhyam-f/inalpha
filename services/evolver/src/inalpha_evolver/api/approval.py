@@ -24,6 +24,7 @@ def verify_evolution_approval(
     provider: str,
     llm_config_digest: str,
     request_digest: str,
+    grant_purpose: str,
     settings: EvolverSettings,
 ) -> None:
     """Verify one owner/request-bound grant without giving Evolver signing authority."""
@@ -54,6 +55,7 @@ def verify_evolution_approval(
         "operation_id": operation_id,
         "config_id": config_id,
         "provider": provider,
+        "grant_purpose": grant_purpose,
         "llm_config_digest": llm_config_digest,
         "request_digest": request_digest,
     }
@@ -62,7 +64,8 @@ def verify_evolution_approval(
     invalid_ttl = (
         not isinstance(issued_at, int)
         or not isinstance(expires_at, int)
-        or expires_at - issued_at > _MAX_GRANT_TTL_SECONDS
+        or expires_at - issued_at
+        > (300 if grant_purpose == "evolution_loop_start" else _MAX_GRANT_TTL_SECONDS)
         or expires_at <= issued_at
     )
     if invalid_ttl or any(payload.get(key) != value for key, value in expected.items()):

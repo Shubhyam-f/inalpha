@@ -13,6 +13,7 @@
     "risk": "Risk",
     "divination": "Omikuji",
     "evolution": "Evolution",
+    "dataHealth": "Event Data Health",
     "soon": "soon",
     "menu": "Menu",
     "close": "Close",
@@ -65,6 +66,12 @@
   "overview": {
     "title": "Portfolio Overview",
     "subtitle": "A live snapshot of your account, positions, orders, and strategy pool.",
+    "evolution": {
+      "active": "Active Campaigns",
+      "waiting": "Waiting for Events",
+      "adoption": "Awaiting Adoption",
+      "sources": "Event Source Faults"
+    },
     "kpi": {
       "totalEquity": "Total Equity",
       "totalReturn": "Total Return",
@@ -271,6 +278,7 @@
       "order": "Orders",
       "backtest": "Backtests",
       "runner": "Runners",
+      "evolution": "Evolution",
       "conversation": "Chats"
     },
     "empty": "No activity yet.",
@@ -305,6 +313,13 @@
     "resize": "Drag to resize height"
   },
   "lab": {
+    "experimental": {
+      "title": "Experimental Evolution Strategies",
+      "empty": "No adopted event-evolution winner yet.",
+      "badge": "Limited evidence · Experimental",
+      "grade": "Evidence grade: {grade}",
+      "lineage": "View evolution lineage"
+    },
     "title": "Strategy Lab",
     "subtitle": "LLM-authored strategy candidates, ranked by multi-objective fitness — with their latest backtest metrics.",
     "candidates": "Candidates",
@@ -502,8 +517,10 @@
     "toolDenied": "denied",
     "toolAwaitingApproval": "awaiting approval",
     "toolResponded": "responded",
+    "approvalResumePrompt": "I approved this operation's cost. Continue the previous action.",
     "toolResult": "output",
     "errorGeneric": "Agent reply failed. Please retry — likely an upstream LLM error or dropped stream.",
+    "errorIncompleteStream": "The upstream model interrupted its reply. Check the active model balance, quota, or API key, then retry.",
     "errorDismiss": "Dismiss",
     "marketNews": {
       "partial": "Some sources failed.",
@@ -520,6 +537,8 @@
     "context": {
       "viewing": "Viewing",
       "dismiss": "Don't include this page",
+      "evolve": "Continue evolution",
+      "evolvePrompt": "Continue evolving this",
       "kind": {
         "runner_detail": "Paper run",
         "candidate_detail": "Strategy candidate",
@@ -529,9 +548,12 @@
         "risk": "Risk panel",
         "activity": "Agent log",
         "divination": "Divination",
+        "backtest_run_detail": "Backtest run",
         "evolution_list": "Strategy evolution",
         "evolution_run_detail": "Evolution run",
         "evolution_candidate_detail": "Evolution candidate",
+        "evolution_campaign_detail": "Event evolution campaign",
+        "evolution_loop_detail": "Automatic evolution workflow",
         "overview": "Overview"
       }
     }
@@ -565,7 +587,7 @@
   },
   "evolution": {
     "title": "Evolution",
-    "subtitle": "LLM-driven strategy mutation and evaluation — each run spawns candidates through code mutation, AST audit, sandboxing, and backtest evaluation.",
+    "subtitle": "Event facts and paper feedback drive two-level evolution: agents diversify hypotheses, deterministic DSL arms validate them, and one champion enters durable Forward.",
     "runs": "Total runs",
     "running": "Running",
     "llmCost": "LLM cost",
@@ -632,10 +654,121 @@
     },
     "loadMore": "Load more",
     "loadingMore": "Loading…"
+    ,"start": {
+      "label": "Start evolution",
+      "prompt": "Start evolution",
+      "hint": "Start an automatic evolution loop from the strategy or paper run on this page",
+      "checking": "Checking evolution capability"
+    }
+    ,"loop": {
+      "costTitle": "Model costs · USD",
+      "costUnavailable": "Cost ledger unavailable; this does not mean zero spend.",
+      "costExplanation": "Reservations cover in-flight or unconfirmed calls and are not settled spend.",
+      "cost": {
+        "max_cost_usd": "Authorized limit",
+        "spent_usd": "Settled",
+        "reserved_usd": "Reserved",
+        "available_usd": "Available"
+      },
+      "back": "Back to evolution",
+      "baseline": "E1 baseline",
+      "adoption": "Manual adoption",
+      "unavailable": "Unable to load this workflow",
+      "refreshFailed": "Refresh failed. Showing the last received state; please retry.",
+      "diagnostic": "Diagnostics",
+      "safety": "Research continues independently of chat. No automatic adoption, Runner launch, or orders.",
+      "guidance": {
+        "target_resolved": "Preparing frozen data and the E1 baseline. No repeat trigger is needed.",
+        "baseline_ready": "The baseline is ready. The scheduler will hand off to E2 automatically.",
+        "campaign_running": "Evaluating five generations. Insufficient evidence ends the campaign without forcing a winner.",
+        "candidate_locked": "The champion is locked. Preparing an independent Forward sandbox.",
+        "waiting_forward": "Waiting for real Forward evidence: at least 30 days and 3 independent events, up to 90 days.",
+        "holdout_running": "Running the one-shot sealed holdout. Another candidate cannot retry it.",
+        "adoption_ready": "Open the Campaign to review evidence and adopt manually. Adoption remains research-only.",
+        "rejected": "Validation did not pass. No automatic adoption; review diagnostics and Campaign evidence.",
+        "insufficient_evidence": "Evidence cannot support a winner conclusion. No strategy will be started automatically.",
+        "failed": "Execution failed. Review diagnostics; refreshing does not charge again or restart the experiment."
+      },
+      "title": "Automatic Evolution Loops",
+      "empty": "No evolution loop yet. Say “start evolution” from a strategy, paper run, or E1 result.",
+      "target": "Target",
+      "status": "Current stage",
+      "campaign": "Campaign",
+      "forward": "Forward sandbox",
+      "holdout": "Sealed holdout",
+      "updated": "Updated",
+      "pending": "Pending",
+      "created": "Created",
+      "sealed": "Unconsumed",
+      "consumed": "Locked",
+      "states": {
+        "target_resolved": "Target resolved",
+        "baseline_ready": "Baseline ready",
+        "campaign_running": "Five-generation evolution",
+        "candidate_locked": "Champion locked",
+        "waiting_forward": "Forward observation",
+        "holdout_running": "Sealed holdout",
+        "adoption_ready": "Awaiting adoption",
+        "rejected": "Rejected",
+        "insufficient_evidence": "Insufficient evidence",
+        "failed": "Failed"
+      }
+    },
+    "campaign": {
+      "title": "Event Campaigns",
+      "empty": "No event campaign yet; E1 single-generation runs keep their existing semantics.",
+      "id": "Campaign",
+      "status": "Status",
+      "stage": "Generation",
+      "budget": "Candidates/gen",
+      "events": "Forward events",
+      "holdout": "Sealed holdout",
+      "updated": "Updated",
+      "sealed": "Unconsumed",
+      "consumed": "Consumed",
+      "back": "Back to evolution",
+      "detailTitle": "Event Evolution",
+      "detailSubtitle": "The audit trail for frozen facts, hypothesis lineage, selection, ablations, Forward, and one-shot holdout.",
+      "track": "Generation Track",
+      "frozenData": "Frozen Facts & Execution",
+      "snapshot": "Event snapshot",
+      "facts": "Facts",
+      "eventHash": "Event hash",
+      "executionModel": "Execution model",
+      "forwardHoldout": "Forward & Holdout",
+      "forwardEvents": "Independent events",
+      "deadline": "Deadline",
+      "winner": "Locked champion",
+      "hypotheses": "Hypotheses, Evidence & Lineage",
+      "selected": "Selected parent",
+      "ablations": "Implementation Ablations & Event Effects",
+      "failure": "Failure",
+      "adopt": "Adopt into Strategy Lab",
+      "adopting": "Adopting…",
+      "adopted": "Adopted as an experimental strategy",
+      "adoptHint": "Adoption does not promote, start Runner, or trade; runner_eligible is enforced false."
+    }
   },
   "backtests": {
     "back": "Agent Activity",
     "notFound": "Backtest run not found.",
     "viewCandidate": "View strategy"
+  }
+  ,"dataHealth": {
+    "title": "Event Data Health",
+    "subtitle": "Coverage, first acceptance, revisions, and snapshot integrity for the event source of truth.",
+    "rawEvents": "Raw events",
+    "facts": "Normalized facts",
+    "retractions": "Revisions / retractions",
+    "lastAccepted": "Last accepted",
+    "extractionPending": "Pending extraction",
+    "extractionLeased": "Extracting",
+    "extractionDead": "Failed extraction",
+    "sources": "Source coverage",
+    "source": "Source",
+    "count": "Events",
+    "latest": "Last fetch",
+    "versions": "Max version",
+    "empty": "No event source has been archived yet."
   }
 }

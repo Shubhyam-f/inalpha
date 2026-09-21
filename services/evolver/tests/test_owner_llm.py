@@ -54,6 +54,7 @@ def _settings() -> SimpleNamespace:
         jwt_secret="test-secret-at-least-32-bytes-long",
         jwt_algorithm="HS256",
         evolver_llm_timeout_s=45,
+        evolver_credential_timeout_s=60,
     )
 
 
@@ -76,10 +77,11 @@ async def test_owner_mutator_uses_frozen_snapshot_and_credential_reference(
     mutator = await build_owner_mutator(run, settings)  # type: ignore[arg-type]
 
     assert _CredentialClient.kwargs["trust_env"] is False
+    assert _CredentialClient.kwargs["timeout"] == 60
     assert _CredentialClient.requested_url.endswith("/api/internal/llm-config/config-1")
     assert _CredentialClient.requested_headers["Authorization"] == "Bearer signed-credential-grant"
     assert mutator.llm_client.settings.effective_api_key == "owner-test-key"
-    assert mutator.llm_client.settings.llm_model == "deepseek-v4-pro"
+    assert mutator.llm_client.settings.llm_model == "deepseek-flash"
     assert mutator.max_output_tokens == 8_192
     assert "api_key" not in run["llm_snapshot"]
     client = await mutator.llm_client._ensure_client()
@@ -184,6 +186,51 @@ async def test_owner_mutator_propagates_credential_network_failure(
 
     with pytest.raises(CredentialTemporarilyUnavailable, match="ReadTimeout"):
         await build_owner_mutator(_run(), _settings())  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_loop_renews_owner_credential_instead_of_reusing_expired_chat_grant(monkeypatch):
+    from uuid import uuid4
+
+    import jwt
+
+    from inalpha_evolver.loop_llm import LoopModelScope
+
+    scope = LoopModelScope(uuid4(), uuid4(), uuid4(), "baseline")
+    settings = _settings()
+    settings.orchestration_service_url = "http://orchestration:4111"
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        if request.method == "POST":
+            claims = jwt.decode(
+                request.headers["authorization"].split(" ")[1], settings.jwt_secret,
+                algorithms=["HS256"], audience="inalpha-orchestration",
+            )
+            assert claims["sub"] == "service:evolver"
+            assert claims["token_purpose"] == "evolution_loop_credential"
+            assert claims["owner_account_id"] == str(scope.owner_account_id)
+            assert claims["lease_token"] == str(scope.lease_token)
+            assert claims["exp"] - claims["iat"] <= 300
+            return httpx.Response(200, json={"credential_grant": "fresh-loop-grant"})
+        assert request.headers["authorization"] == "Bearer fresh-loop-grant"
+        return httpx.Response(200, json=_Response.payload)
+
+    client_type = httpx.AsyncClient
+    monkeypatch.setattr(
+        "inalpha_evolver.owner_llm.httpx.AsyncClient",
+        lambda **kwargs: client_type(**kwargs, transport=httpx.MockTransport(respond)),
+    )
+    run = {**_run(), "owner_account_id": scope.owner_account_id, "llm_credential_grant": None}
+    mutator = await build_owner_mutator(run, settings, loop_scope=scope)
+    try:
+        assert len(requests) == 2
+        assert str(requests[0].url).endswith(f"/{scope.loop_id}/credential-grant")
+        assert run["llm_credential_grant"] is None
+        assert "api_key" not in run
+    finally:
+        await mutator.close()
 
 
 class _ClosableMutator:

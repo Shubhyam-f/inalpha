@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -19,12 +20,14 @@ from inalpha_shared.middleware import install_error_handler, install_request_log
 from .api.routes import router
 from .config import get_evolver_settings
 from .runtime import EvolutionRunManager
+from .runtime.campaign_manager import CampaignManager
+from .runtime.loop_manager import LoopManager
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """初始化 DB 队列与 manager；E1 强制单 API worker。"""
     settings = get_evolver_settings()
     workers = int(os.environ.get("WEB_CONCURRENCY", os.environ.get("WORKERS", "1")))
@@ -40,9 +43,21 @@ async def lifespan(app: FastAPI):
     manager = EvolutionRunManager(mutator=None, settings=settings)
     app.state.evolution_manager = manager
     await manager.start()
+    campaign_manager = CampaignManager(settings) if settings.event_evolution_enabled else None
+    app.state.campaign_manager = campaign_manager
+    if campaign_manager is not None:
+        await campaign_manager.start()
+    loop_manager = LoopManager(settings, campaign_manager) if settings.event_evolution_enabled else None
+    app.state.loop_manager = loop_manager
+    if loop_manager is not None:
+        await loop_manager.start()
     try:
         yield
     finally:
+        if loop_manager is not None:
+            await loop_manager.close()
+        if campaign_manager is not None:
+            await campaign_manager.close()
         await manager.close()
         await close_pool()
 
@@ -72,4 +87,23 @@ async def health(request: Request) -> dict[str, str] | JSONResponse:
                 "reason": reason,
             },
         )
-    return {"status": "ok", "service": "inalpha-evolver"}
+    campaign_manager = getattr(request.app.state, "campaign_manager", None)
+    if campaign_manager is not None and not campaign_manager.healthy:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "service": "inalpha-evolver",
+                "reason": campaign_manager.unhealthy_reason or "campaign dispatcher unavailable",
+            },
+        )
+    response = {"status": "ok", "service": "inalpha-evolver"}
+    loop_manager = getattr(request.app.state, "loop_manager", None)
+    if loop_manager is not None and not loop_manager.healthy:
+        return JSONResponse(status_code=503, content={
+            "status": "unhealthy", "service": "inalpha-evolver",
+            "reason": loop_manager.unhealthy_reason or "loop dispatcher unavailable",
+        })
+    if campaign_manager is not None:
+        response["event_evolution"] = "enabled"
+    return response

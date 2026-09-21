@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from inalpha_evolver.api.presenters import candidate_response, run_response
 from inalpha_evolver.api.request_hash import approval_request_digest, normalized_request
 from inalpha_evolver.api.schemas import (
+    CampaignResponse,
     EvolutionConfig,
     EvolutionLLMSnapshot,
     RunStatusResponse,
@@ -45,10 +46,61 @@ def test_request_hash_is_stable_and_payload_sensitive() -> None:
     assert hash_a != hash_c
 
 
+def test_e1_preserves_perpetual_execution_config() -> None:
+    config = EvolutionConfig.model_validate(
+        {
+            **_request().config.model_dump(),
+            "trading_mode": "perp",
+            "leverage": 3,
+        }
+    )
+    payload = config.model_dump()
+    assert payload["trading_mode"] == "perp"
+    assert payload["leverage"] == 3
+
+
+def test_e1_rejects_leveraged_spot_config() -> None:
+    with pytest.raises(ValueError, match="spot"):
+        EvolutionConfig.model_validate(
+            {
+                **_request().config.model_dump(),
+                "trading_mode": "spot",
+                "leverage": 3,
+            }
+        )
+
+
+def test_execution_config_is_bound_to_approval() -> None:
+    request = _request()
+    spot_digest = approval_request_digest(request)
+    request.config.trading_mode = "perp"
+    perp_digest = approval_request_digest(request)
+    request.config.leverage = 3
+    assert len({spot_digest, perp_digest, approval_request_digest(request)}) == 3
+
+
+def test_funding_cost_is_bound_to_approval():
+    request = _request()
+    before = approval_request_digest(request)
+    request.config.funding_rate = 0.001
+    assert approval_request_digest(request) != before
+
+
+def test_strategy_params_are_preserved_and_bound_to_approval():
+    request = _request()
+    original = approval_request_digest(request)
+    request.config = EvolutionConfig.model_validate({
+        **request.config.model_dump(), "params": {"trade_size": 3, "nested": [True, None, 0.5]},
+    })
+    assert request.config.model_dump()["params"]["trade_size"] == 3
+    assert approval_request_digest(request) != original
+    assert approval_request_digest(request) == "a0fd1c7682bd74ed9e6a8466342c6a6fce3b1c110bf1060ac75c417228a34ab2"
+
+
 def test_approval_request_digest_matches_typescript_contract() -> None:
     assert (
         approval_request_digest(_request())
-        == "c3084e0f6daee93abc87dd3dc5804295e70649f33fcd2b3613cf6de71e876d88"
+        == "e3c4c9711d8e4b263ad4cb07b4f89f54603dcf7aa37a504e7a179ec41c8b5b50"
     )
 
 
@@ -135,6 +187,38 @@ def test_run_presenter_converts_numeric_cost() -> None:
     assert response.attempted == 2
 
 
+def test_historical_campaign_snapshot_does_not_depend_on_current_pricing_catalog() -> None:
+    """已冻结的旧模型快照必须可读，但不能绕过新请求的价格准入。"""
+    now = datetime(2026, 8, 12, 12, tzinfo=UTC)
+    historical_snapshot = copy.deepcopy(VALID_LLM_SNAPSHOT)
+    historical_snapshot["model"] = "deepseek-v4-pro"
+    historical_snapshot["pricing"]["version"] = "provider-estimate-2026-08"
+
+    response = CampaignResponse.model_validate(
+        {
+            "campaign_id": uuid4(),
+            "owner_account_id": uuid4(),
+            "status": "failed",
+            "active_generation": 5,
+            "hypothesis_budget": 8,
+            "implementations_per_hypothesis": 3,
+            "max_generations": 5,
+            "event_snapshot_id": uuid4(),
+            "frozen_config": {},
+            "llm_snapshot": historical_snapshot,
+            "llm_config_digest": historical_snapshot["config_digest"],
+            "llm_cost_usd": 0,
+            "state_version": 1,
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+
+    assert response.llm_snapshot.model == "deepseek-v4-pro"
+    with pytest.raises(ValueError, match="pricing is unavailable"):
+        EvolutionLLMSnapshot.model_validate(historical_snapshot)
+
+
 def test_datetime_inputs_normalize_or_fail_without_type_error() -> None:
     now = datetime.now(UTC) - timedelta(minutes=1)
     config = EvolutionConfig(
@@ -194,6 +278,40 @@ def test_candidate_response_exposes_data_epoch() -> None:
         }
     )
     assert response.data_epoch == 1_786_000_000_000
+
+
+def test_pending_candidate_allows_missing_data_epoch() -> None:
+    response = candidate_response(
+        {
+            "candidate_id": "00000000-0000-0000-0000-000000000001",
+            "run_id": "00000000-0000-0000-0000-000000000002",
+            "generation": 1,
+            "slot": 0,
+            "stage": "mutation",
+            "outcome": "pending",
+            "status": "evaluated",
+            "source_code": None,
+            "source_hash": None,
+            "unified_diff": None,
+            "mutation_hint": "test",
+            "llm_cost_usd": 0,
+            "cache_hit_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "fitness": None,
+            "evaluation_snapshot": None,
+            "audit_snapshot": None,
+            "contract_snapshot": None,
+            "error_code": None,
+            "error_message": None,
+            "overfitting_risk": None,
+            "data_epoch": None,
+            "created_at": "2026-09-20T00:00:00Z",
+            "updated_at": "2026-09-20T00:00:00Z",
+        }
+    )
+
+    assert response.data_epoch is None
 
 
 def test_run_dto_exposes_manifest_cutoff_and_lag() -> None:

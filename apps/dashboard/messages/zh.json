@@ -13,6 +13,7 @@
     "risk": "风控",
     "divination": "狐神签",
     "evolution": "策略演化",
+    "dataHealth": "事件数据健康",
     "soon": "即将",
     "menu": "菜单",
     "close": "关闭",
@@ -65,6 +66,12 @@
   "overview": {
     "title": "组合总览",
     "subtitle": "账户、持仓、订单与策略池的实时快照。",
+    "evolution": {
+      "active": "活跃 Campaign",
+      "waiting": "等待事件",
+      "adoption": "待人工采用",
+      "sources": "事件源故障"
+    },
     "kpi": {
       "totalEquity": "总权益",
       "totalReturn": "总收益率",
@@ -271,6 +278,7 @@
       "order": "订单",
       "backtest": "回测",
       "runner": "模拟盘",
+      "evolution": "演化",
       "conversation": "会话"
     },
     "empty": "暂无活动。",
@@ -305,6 +313,13 @@
     "resize": "拖动调整高度"
   },
   "lab": {
+    "experimental": {
+      "title": "实验性演化策略",
+      "empty": "暂无已采用的事件演化赢家。",
+      "badge": "有限证据 · 实验性",
+      "grade": "证据等级：{grade}",
+      "lineage": "查看演化血缘"
+    },
     "title": "策略实验室",
     "subtitle": "LLM 自创的策略候选,按多目标 fitness 排序 —— 附最近一次回测指标。",
     "candidates": "候选",
@@ -502,8 +517,10 @@
     "toolDenied": "已拒绝",
     "toolAwaitingApproval": "待审批",
     "toolResponded": "已响应",
+    "approvalResumePrompt": "已确认本次费用授权，请继续执行刚才的操作。",
     "toolResult": "输出",
     "errorGeneric": "Agent 回复失败，请重试 —— 多半是上游 LLM 报错或连接中断。",
+    "errorIncompleteStream": "上游模型中断了回复。请检查当前模型配置的余额、额度或 API Key 后重试。",
     "errorDismiss": "关闭",
     "marketNews": {
       "partial": "部分来源失败。",
@@ -520,6 +537,8 @@
     "context": {
       "viewing": "正在看",
       "dismiss": "不带本页上下文",
+      "evolve": "继续进化",
+      "evolvePrompt": "继续进化这个",
       "kind": {
         "runner_detail": "模拟盘",
         "candidate_detail": "策略候选",
@@ -529,9 +548,12 @@
         "risk": "风控面板",
         "activity": "Agent 日志",
         "divination": "占卜台",
+        "backtest_run_detail": "回测运行",
         "evolution_list": "策略演化",
         "evolution_run_detail": "演化运行",
         "evolution_candidate_detail": "演化候选",
+        "evolution_campaign_detail": "事件演化 Campaign",
+        "evolution_loop_detail": "自动演化任务",
         "overview": "总览"
       }
     }
@@ -565,7 +587,7 @@
   },
   "evolution": {
     "title": "策略演化",
-    "subtitle": "LLM 驱动的策略自动变异与评估 —— 每轮运行通过代码变异、AST 审计、沙盒执行、回测评估产出候选策略。",
+    "subtitle": "事件事实与模拟盘反馈驱动的双层自动演化 —— Agent 发散假设，确定性 DSL 消融验证，单冠军进入耐久 Forward。",
     "runs": "总运行轮次",
     "running": "运行中",
     "llmCost": "LLM 费用",
@@ -632,10 +654,121 @@
     },
     "loadMore": "加载更多",
     "loadingMore": "正在加载…"
+    ,"start": {
+      "label": "开始进化",
+      "prompt": "开始进化",
+      "hint": "基于当前页面的策略或模拟盘启动自动演化闭环",
+      "checking": "正在检查演化能力"
+    }
+    ,"loop": {
+      "costTitle": "模型费用 · USD",
+      "costUnavailable": "暂无费用账本信息，不代表费用为零。",
+      "costExplanation": "预留费用用于在途或结果待确认的调用，尚未计入已结算费用。",
+      "cost": {
+        "max_cost_usd": "授权上限",
+        "spent_usd": "已结算",
+        "reserved_usd": "预留",
+        "available_usd": "剩余可用"
+      },
+      "back": "返回演化列表",
+      "baseline": "E1 基线",
+      "adoption": "人工采用",
+      "unavailable": "暂时无法读取演化任务",
+      "refreshFailed": "更新失败，当前显示上次读取的状态。请重试。",
+      "diagnostic": "诊断信息",
+      "safety": "研究任务独立于聊天持续执行；不会自动采用、启动 Runner 或下单。",
+      "guidance": {
+        "target_resolved": "正在准备冻结数据与 E1 基线，无需重复触发。",
+        "baseline_ready": "基线已完成，调度器将自动交接 E2，无需再次点击开始。",
+        "campaign_running": "正在评估五代候选；证据不足时会结束，不会强行产生赢家。",
+        "candidate_locked": "冠军已锁定，正在准备独立 Forward 沙盒。",
+        "waiting_forward": "等待真实 Forward 证据：至少 30 天、3 个独立事件；最多等待 90 天。",
+        "holdout_running": "正在执行一次性封存测试，不能更换候选重试。",
+        "adoption_ready": "请打开 Campaign 查看证据并手动采用。采用后仍仅限研究。",
+        "rejected": "本轮未通过验证，不会自动采用。请查看诊断与 Campaign 证据。",
+        "insufficient_evidence": "当前证据不足以支持赢家结论，不会自动启动策略。",
+        "failed": "任务执行失败。请查看诊断信息；刷新页面不会重新收费或重启实验。"
+      },
+      "title": "自动演化闭环",
+      "empty": "暂无演化闭环。可在策略、模拟盘或 E1 结果页说一句“开始进化”。",
+      "target": "演化目标",
+      "status": "当前阶段",
+      "campaign": "Campaign",
+      "forward": "Forward 沙盒",
+      "holdout": "封存测试",
+      "updated": "更新",
+      "pending": "待创建",
+      "created": "已创建",
+      "sealed": "未消费",
+      "consumed": "已锁定",
+      "states": {
+        "target_resolved": "已解析目标",
+        "baseline_ready": "基线已就绪",
+        "campaign_running": "五代演化中",
+        "candidate_locked": "冠军已锁定",
+        "waiting_forward": "Forward 观察中",
+        "holdout_running": "封存测试中",
+        "adoption_ready": "等待人工采用",
+        "rejected": "未通过",
+        "insufficient_evidence": "证据不足",
+        "failed": "失败"
+      }
+    },
+    "campaign": {
+      "title": "事件 Campaign",
+      "empty": "暂无事件演化 Campaign；E1 单代演化仍保留原语义。",
+      "id": "Campaign",
+      "status": "状态",
+      "stage": "代际",
+      "budget": "每代候选",
+      "events": "Forward 事件",
+      "holdout": "封存测试",
+      "updated": "更新",
+      "sealed": "未消费",
+      "consumed": "已消费",
+      "back": "返回演化列表",
+      "detailTitle": "事件演化",
+      "detailSubtitle": "冻结事实、假设血缘、代际选择、消融验证与一次性 Holdout 的完整审计轨迹。",
+      "track": "代际轨道",
+      "frozenData": "冻结事实与执行契约",
+      "snapshot": "事件快照",
+      "facts": "事实数",
+      "eventHash": "事件哈希",
+      "executionModel": "撮合模型",
+      "forwardHoldout": "Forward 与 Holdout",
+      "forwardEvents": "独立事件",
+      "deadline": "最长等待",
+      "winner": "锁定冠军",
+      "hypotheses": "假设、证据与血缘",
+      "selected": "入选父代",
+      "ablations": "实现消融与事件效应",
+      "failure": "失败原因",
+      "adopt": "采用到策略实验室",
+      "adopting": "正在采用…",
+      "adopted": "已作为实验性策略采用",
+      "adoptHint": "采用不会 promote、启动 Runner 或下单；后端强制 runner_eligible=false。"
+    }
   },
   "backtests": {
     "back": "Agent 活动",
     "notFound": "未找到该回测记录。",
     "viewCandidate": "查看策略详情"
+  }
+  ,"dataHealth": {
+    "title": "事件数据健康",
+    "subtitle": "事件唯一事实源的覆盖、首次接收、修订与冻结快照完整性。",
+    "rawEvents": "原始事件",
+    "facts": "规范事实",
+    "retractions": "修订 / 撤回",
+    "lastAccepted": "最后接收",
+    "extractionPending": "待抽取",
+    "extractionLeased": "抽取中",
+    "extractionDead": "抽取失败",
+    "sources": "来源覆盖",
+    "source": "来源",
+    "count": "事件数",
+    "latest": "最后抓取",
+    "versions": "最高版本",
+    "empty": "尚未归档事件来源。"
   }
 }

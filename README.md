@@ -47,7 +47,7 @@ Several capability lines sit on top of that harness:
 
 The name combines **Ina**ri (the Japanese fox deity of prosperity) with **alpha** (the quant term for excess return) — a companion that reads your direction and keeps every step on the record.
 
-> **Status:** Inalpha is in **alpha** — 79 factors with lineage & decay watch, restricted-DSL factor discovery, a three-party research debate, multi-market paper trading, and an E1 strategy-evolution service. Each evolution run requires explicit approval, freezes its dataset and non-secret LLM/pricing snapshot, and never auto-promotes or starts a candidate. Read the code, weigh in on design — **do not run this against real money** (real-money trading is out of scope).
+> **Status:** Inalpha is in **alpha** — 79 factors with lineage & decay watch, restricted-DSL factor discovery, a three-party research debate, multi-market paper trading, and E1/E2 strategy evolution. Feature-flagged E2 adds point-in-time event snapshots, deterministic hypothesis DSL compilation, five-generation campaigns, Forward evidence, and one-shot sealed holdout. Evolution never auto-promotes, starts, or trades a candidate. Read the code, weigh in on design — **do not run this against real money** (real-money trading is out of scope).
 
 ---
 
@@ -128,7 +128,7 @@ Three software layers over one data layer. A request flows down; results flow ba
 | `services/paper` | The event-driven kernel — backtest + paper on the **same code** — plus the LLM-authored-strategy sandbox and the live runner. |
 | `services/research` | Multi-agent deep dive: 6 analysts in parallel, then a bull / bear / risk debate (triggered only when they disagree, with a soft early-stop and the decision chain persisted for replay). |
 | `services/factor` | The factor library (pandas-ta / Alpha101 / qlib + FRED macro): IC screening, current-effective factor timing, lineage & decay watch, DSL factor discovery. **Signals only — never places an order.** |
-| `services/evolver` | Owner-scoped E1 strategy evolution: unified-diff mutation, frozen-data evaluation, candidate/run lineage, cost accounting, and an explicit approval boundary. **Never auto-promotes, starts, or trades a candidate.** |
+| `services/evolver` | Owner-scoped E1/E2 evolution: unified-diff mutation, event-hypothesis campaigns, frozen-data evaluation, lineage, cost accounting, Forward/holdout gates, and explicit final adoption. **Never auto-promotes, starts, or trades a candidate.** |
 
 **L4 · Persistence & external.** Postgres + TimescaleDB holds all time-series and business state. External venues span crypto, US / A-share / HK and other Asian & European single-name equities, global indices, and FRED macro — the orchestrator routes each venue automatically by market type.
 
@@ -173,7 +173,7 @@ Human-written strategies hit a velocity ceiling, and parameter tuning can only a
 - **Reproducible end to end.** One run freezes `as_of`, the closed-bar dataset manifest/hash, seed source, baseline, candidate source/diff, evaluation snapshots, and non-secret LLM/provider/pricing metadata. The user's encrypted API key is resolved only for that owner and never stored in the run.
 - **Explicitly authorized and non-promoting.** Starting a run requires a trusted approval bound to the owner, operation ID, request, estimated cost, and frozen LLM snapshot. Completion never promotes, starts, or routes a candidate into the order path.
 
-> E1 now runs as the separate `services/evolver` service on port 8005. E2 is intentionally narrower than the original research plan: best-parent multi-generation selection plus early stopping first; MAP-Elites and Island Model wait for real run data to justify the complexity.
+> E1 and feature-flagged E2 run in the separate `services/evolver` service on port 8005. E2 uses fixed 8×3 generations, novelty-aware inheritance, one locked Forward champion, and a single-use sealed holdout; MAP-Elites and Island Model wait for real run data to justify the complexity.
 
 ### 4. Swarm — run dozens of backtests in parallel
 
@@ -234,6 +234,7 @@ Where each capability stands today. Live module inventory and the end-to-end dec
 | ✅ Shipped | LLM-authored strategies — E1 MVP | D-9 | three sandbox gates (AST · subprocess · `Strategy` contract) + multi-objective fitness + baseline auto-run |
 | ✅ Shipped | Strategy evolution — E1 production loop | E1 | `services/evolver:8005` · explicit cost-bearing approval · unified-diff mutation · frozen dataset/hash · seed/baseline/candidates evaluated on the same bars · owner-scoped async run/slot state |
 | ✅ Shipped | Frozen LLM approval snapshot | E1 closure | Dashboard approve/deny · owner/operation/model/pricing binding · Ed25519 replay-safe credential grant · per-slot token/cost accounting, including rejected mutations |
+| ✅ Feature flag | Event-driven automatic evolution | E2 | bitemporal event snapshots · HypothesisSpec DSL · five 8×3 generations · Forward + one-shot sealed holdout · human experimental adoption only, never Runner eligible |
 | ✅ Shipped | Risk engine at the HTTP boundary | D-9 | declarative `risk_rules.toml` · pre-trade `enforce` · `risk_locks` table with independent commit |
 | ✅ Shipped | Bull / bear researcher debate | D-9 | opposing-stance researchers under `services/research` |
 | ✅ Shipped | Scheduler / cron agent mode | D-9 | `scheduler_jobs` + advisory lock + `/api/scheduler/*` management plane |
@@ -255,7 +256,6 @@ Where each capability stands today. Live module inventory and the end-to-end dec
 | ✅ Shipped | Cross-sectional factor scoring | D-12 | `factor.panel_score` · `POST /panel/score` · cross-sectional Rank IC (rank the pool each period vs forward cross-sectional return) · native Alpha101 a1/a3 · orthogonal to single-name timing |
 | ✅ Shipped | Time-series cross-validation — anti-overfitting | D-12 | WalkForward / PurgedKFold / Combinatorial Purged CV + Deflated Sharpe · `POST /backtest/cv` · test fold always includes the latest bar · auto-fallback to walk-forward when samples are short |
 | ✅ Shipped | Point-in-time fundamentals | D-12 | Baostock financials filtered by actual publication date · `GET /fundamentals?as_of=` · prevents look-ahead (yfinance v1 not yet PIT, explicitly flagged) |
-| 🗓️ Planned | Strategy evolution — E2 | E2 | best-parent multi-generation loop + early stopping; MAP-Elites / Island Model deferred until real run data shows a diversity problem |
 | 🗓️ Planned | Factor discovery — L2 / L3 | L2 / L3 | multi-agent factor crew (L2) + weekly automated scans (L3), on top of the L1 DSL pipeline already shipped |
 | 🗓️ Planned | Automated decay handling | TBD | reflection-driven backtest + auto-trim of decaying factors — today the decay patrol only alerts, never moves the book |
 | 🔬 Exploring | Alpha Zoo cold start | E1+ | seed factor library with public alphas (Qlib / Kakushadze / GTJA) |
@@ -349,11 +349,11 @@ cp .env.example .env
 
 Inside `.env`, set `LLM_PROVIDER` to one of `deepseek | anthropic | openai | gemini | kimi | zhipu | ollama` and fill in the matching key.
 
-Defaults pick each vendor's **current flagship** as of 2026-05. Override with `LLM_MODEL=...` if you want a reasoning / cheaper variant.
+Defaults pick each vendor's preferred Inalpha model as of 2026-09. Override with `LLM_MODEL=...` if you want a reasoning / flagship variant.
 
-| Provider | env var | Default model (2026-05) | Get a key |
+| Provider | env var | Default model (2026-09) | Get a key |
 |---|---|---|---|
-| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-v4-pro` | [platform.deepseek.com](https://platform.deepseek.com) |
+| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-flash` | [platform.deepseek.com](https://platform.deepseek.com) |
 | `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-4-8` | [console.anthropic.com](https://console.anthropic.com) |
 | `openai` | `OPENAI_API_KEY` | `gpt-5.5` | [platform.openai.com](https://platform.openai.com) |
 | `gemini` | `GEMINI_API_KEY` | `gemini-3-pro` | [aistudio.google.com](https://aistudio.google.com) |
@@ -414,6 +414,14 @@ and an `en / 中` switcher in the sidebar.
 
 > The console is the single front door: data, research, backtests, live runners, and the
 > conversation with the orchestrator now all live in one place.
+
+**Try automatic event evolution locally.** Set `EVENT_EVOLUTION_ENABLED=true` in the repository
+`.env`, and either import historical event facts or also enable the archive/extraction workers with
+`EVENT_ARCHIVE_ENABLED=true` and `EVENT_EXTRACTION_ENABLED=true`. Restart the services, then open a strategy, paper-run, or E1-result detail page and choose
+**Start evolution**. You can also type “start evolution” in the docked agent chat. Repeated requests
+reuse the same active owner-and-target loop. E2 runs its generations without per-generation approval,
+but a result still needs manual adoption and remains research-only (`runner_eligible=false`). A target
+with no point-in-time event facts fails before spending LLM budget with `EVENT_SNAPSHOT_EMPTY`.
 
 > The orchestrator and an explicitly approved `services/evolver` run can consume your owner-scoped
 > LLM key; `services/research` currently uses the deployment-level provider/key, and

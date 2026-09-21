@@ -11,7 +11,7 @@ import respx
 from fastapi.testclient import TestClient
 from httpx import Response
 
-from .conftest import make_bar_row
+from .conftest import fresh_account_token, make_bar_row
 
 pytestmark = pytest.mark.integration
 
@@ -50,6 +50,29 @@ def _backtest_payload(research_id: UUID | None = None) -> dict[str, Any]:
 # ────────────────────────────────────────────────────────────────────
 # POST /backtest 落库 + 返回 run_id
 # ────────────────────────────────────────────────────────────────────
+
+
+@respx.mock
+def test_persisted_backtest_retains_derivatives_execution_context(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    respx.get("http://data-mock.test/bars").mock(
+        return_value=Response(200, json=_bars_oscillating(100))
+    )
+    payload = {
+        **_backtest_payload(), "trading_mode": "perp", "leverage": 2,
+        "funding_rate": 0.0002,
+    }
+    response = client.post("/backtest", headers=auth_headers, json=payload)
+    assert response.status_code == 200, response.text
+    run_id = response.json()["run_id"]
+    assert run_id is not None
+    stored = client.get(f"/backtest_runs/{run_id}", headers=auth_headers)
+    assert stored.status_code == 200, stored.text
+    config = stored.json()["config"]
+    assert config["trading_mode"] == "perp"
+    assert config["leverage"] == 2
+    assert config["funding_rate"] == 0.0002
 
 
 @respx.mock
@@ -193,6 +216,39 @@ def test_list_backtest_runs_without_filter_returns_recent(
 def test_list_backtest_runs_requires_auth(client: TestClient) -> None:
     r = client.get(f"/backtest_runs?research_id={uuid4()}")
     assert r.status_code == 401
+
+
+@respx.mock
+def test_backtest_run_detail_and_trades_are_owner_scoped(client: TestClient) -> None:
+    """知道别人的 run_id 也不能读取其详情或成交。"""
+    _, owner_token = fresh_account_token("backtest-owner")
+    _, other_token = fresh_account_token("backtest-other")
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    other_headers = {"Authorization": f"Bearer {other_token}"}
+    respx.get("http://data-mock.test/bars").mock(
+        return_value=Response(200, json=_bars_oscillating(100))
+    )
+
+    created = client.post(
+        "/backtest",
+        headers=owner_headers,
+        json=_backtest_payload(),
+    )
+    assert created.status_code == 200, created.text
+    run_id = created.json()["run_id"]
+
+    owner_detail = client.get(f"/backtest_runs/{run_id}", headers=owner_headers)
+    assert owner_detail.status_code == 200
+    assert owner_detail.json()["run_id"] == run_id
+
+    other_detail = client.get(f"/backtest_runs/{run_id}", headers=other_headers)
+    assert other_detail.status_code == 404
+    other_trades = client.get(
+        f"/backtest_runs/{run_id}/trades",
+        headers=other_headers,
+    )
+    assert other_trades.status_code == 200
+    assert other_trades.json() == []
 
 
 @respx.mock

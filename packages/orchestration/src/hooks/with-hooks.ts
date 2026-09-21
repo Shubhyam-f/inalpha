@@ -26,6 +26,8 @@
  *   让 Mastra runtime 把它当 tool 报错处理（LLM 看到错误消息能下一轮决策）。
  * - 现阶段不接 permission engine，仅留 ``permissionResolver`` 参数。task #3 接入。
  */
+import { randomUUID } from "node:crypto";
+
 import {
   APPROVAL_OPERATION_ID_KEY,
   getRequestContextValue,
@@ -53,6 +55,12 @@ type GenericTool = {
   // 允许携带其他厂商字段
   [key: string]: unknown;
 };
+
+const DURABLE_EVOLUTION_APPROVAL_TOOLS = new Set([
+  "evolver.run_evolution",
+  "evolver.run_event_campaign",
+]);
+const E2_CAMPAIGN_RETRY_WINDOW_MS = 2 * 60 * 1_000;
 
 /**
  * mastra ``server.middleware`` 从 Bearer JWT 解出的已认证主体（sub）写进 RequestContext
@@ -201,14 +209,14 @@ export function withHooks<T extends GenericTool>(tool: T, opts: WithHooksOptions
         if (permDecision === "ask") {
           const store = opts.pendingApprovals ?? defaultPendingApprovals;
           const projectedInput = projectApprovalInput(toolName, effectiveInput);
-          const llmSnapshot =
-            toolName === "evolver.run_evolution"
-              ? getRequestContextValue<EvolutionLLMSnapshot>(ctx, USER_LLM_SNAPSHOT_KEY)
-              : undefined;
+          const durableEvolutionApproval = DURABLE_EVOLUTION_APPROVAL_TOOLS.has(toolName);
+          const llmSnapshot = durableEvolutionApproval
+            ? getRequestContextValue<EvolutionLLMSnapshot>(ctx, USER_LLM_SNAPSHOT_KEY)
+            : undefined;
           const approvalInput = llmSnapshot
             ? { request: projectedInput, llm_snapshot: llmSnapshot }
             : projectedInput;
-          if (!authSub || !sessionId || (toolName === "evolver.run_evolution" && !llmSnapshot)) {
+          if (!authSub || !sessionId || (durableEvolutionApproval && !llmSnapshot)) {
             return {
               isError: true,
               deniedBy: "permission-ask",
@@ -228,6 +236,10 @@ export function withHooks<T extends GenericTool>(tool: T, opts: WithHooksOptions
             toolName,
             approvalInput,
             reuseAfterConsume: toolName === "evolver.run_evolution",
+            reuseOnceAfterConsumeMs:
+              toolName === "evolver.run_event_campaign"
+                ? E2_CAMPAIGN_RETRY_WINDOW_MS
+                : undefined,
           });
           if (!operationId) {
             const approvalViewInput = llmSnapshot
@@ -242,7 +254,7 @@ export function withHooks<T extends GenericTool>(tool: T, opts: WithHooksOptions
               timeoutMs:
                 opts.askTimeoutMs && opts.askTimeoutMs > 0
                   ? opts.askTimeoutMs
-                  : toolName === "evolver.run_evolution"
+                  : durableEvolutionApproval
                     ? 300_000
                     : undefined,
             });
@@ -261,6 +273,23 @@ export function withHooks<T extends GenericTool>(tool: T, opts: WithHooksOptions
             };
           }
           setRequestContextValue(ctx, APPROVAL_OPERATION_ID_KEY, operationId);
+        }
+
+        /**
+         * E2 是研究型自动闭环：owner 的明确启动指令不再额外弹审批，但仍需给
+         * Ed25519 grant 一个单次、重试稳定的 operation identity。实际 tool 会继续
+         * fail closed 校验 owner 与冻结 LLM snapshot；eval fixture 没有这些上下文时
+         * 不在 middleware 伪造身份。
+         */
+        if (
+          permDecision === "allow"
+          && ["evolver.run_event_campaign", "evolver.start_evolution_loop"].includes(toolName)
+          && authSub
+          && sessionId
+          && getRequestContextValue<EvolutionLLMSnapshot>(ctx, USER_LLM_SNAPSHOT_KEY)
+          && !getRequestContextValue<string>(ctx, APPROVAL_OPERATION_ID_KEY)
+        ) {
+          setRequestContextValue(ctx, APPROVAL_OPERATION_ID_KEY, randomUUID());
         }
 
         // 3. execute

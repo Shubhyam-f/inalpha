@@ -15,8 +15,10 @@ from .strategy_preparation import audit_strategy_source
 
 if TYPE_CHECKING:
     from .engine.report import BacktestReport
+    from .execution.exchange import EventExecutionPolicy
     from .kernel.identifiers import InstrumentId
     from .model.data import Bar
+    from .model.market_events import MarketEvent
 
 EngineRunner = Callable[..., Awaitable["BacktestReport"]]
 
@@ -42,11 +44,29 @@ async def evaluate_strategy_source(
     trading_mode: str = "spot",
     leverage: int = 1,
     funding_rate: float = 0.0,
+    protective_stop_loss_pct: float | None = None,
+    protective_take_profit_pct: float | None = None,
+    protective_trailing_stop_pct: float | None = None,
+    protective_chandelier_atr_mult: float | None = None,
+    protective_chandelier_atr_period: int = 22,
+    events: list[MarketEvent] | None = None,
+    event_execution_policy: EventExecutionPolicy | None = None,
 ) -> SourceEvaluation:
     """审计临时源码并在调用方提供的隔离执行器中评估。"""
     _validate_bars(bars)
     audited_source = audit_strategy_source(source_code)
     periods = annualization_periods or float(periods_per_year(timeframe))
+    protection: dict[str, Any] = {}
+    for key, value in (
+        ("protective_stop_loss_pct", protective_stop_loss_pct),
+        ("protective_take_profit_pct", protective_take_profit_pct),
+        ("protective_trailing_stop_pct", protective_trailing_stop_pct),
+        ("protective_chandelier_atr_mult", protective_chandelier_atr_mult),
+    ):
+        if value is not None:
+            protection[key] = value
+    if protective_chandelier_atr_mult is not None:
+        protection["protective_chandelier_atr_period"] = protective_chandelier_atr_period
     report = await run_engine(
         bars=bars,
         instrument_id=instrument_id,
@@ -59,7 +79,10 @@ async def evaluate_strategy_source(
         trading_mode=trading_mode,
         leverage=leverage,
         funding_rate=funding_rate,
+        **protection,
         annualization_periods=int(periods),
+        events=events,
+        event_execution_policy=event_execution_policy,
     )
     validation, fitness = await asyncio.to_thread(
         _compute_metrics,

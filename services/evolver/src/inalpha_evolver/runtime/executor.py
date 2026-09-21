@@ -13,11 +13,13 @@ from uuid import UUID
 import jwt
 from inalpha_paper.data_client import DataClient
 from inalpha_paper.evaluation_executor import KillableEngineRunner
+from inalpha_paper.evolution_execution_policy import frozen_protection_kwargs
 from inalpha_shared.db import get_conn
 
 from ..config import EvolverSettings
-from ..data import FrozenBarsLoader
+from ..data import FrozenBarsLoader, FrozenDataset
 from ..evaluator import FrozenDatasetEvaluator
+from ..loop_llm import LoopModelScope
 from ..owner_llm import build_owner_mutator
 from ..storage import runs
 from .generation import execute_generation
@@ -40,6 +42,19 @@ async def execute_run(
             from_ts=config["from_ts"],
             as_of=config["as_of"],
         )
+    await execute_frozen_run(run, dataset=dataset, mutator=mutator, settings=settings)
+
+
+async def execute_frozen_run(
+    run: dict[str, Any],
+    *,
+    dataset: FrozenDataset,
+    mutator: Any | None,
+    settings: EvolverSettings,
+    loop_scope: LoopModelScope | None = None,
+) -> None:
+    """Evaluate an already frozen dataset without another market-data request."""
+    config = _parse_config(run["config"])
     async with get_conn() as conn:
         current = await runs.transition(
             conn,
@@ -64,8 +79,13 @@ async def execute_run(
         initial_cash=float(config["initial_cash"]),
         fee_rate=float(config.get("fee_rate", 0.001)),
         validation_split=float(config.get("validation_split", 0.3)),
+        trading_mode=config.get("trading_mode", "spot"),
+        leverage=int(config.get("leverage", 1)),
+        funding_rate=float(config.get("funding_rate", 0)),
+        params=config.get("params", {}),
+        **frozen_protection_kwargs(config),
     )
-    async with _run_mutator(run, mutator, settings) as active_mutator:
+    async with _run_mutator(run, mutator, settings, loop_scope=loop_scope) as active_mutator:
         await execute_generation(run, mutator=active_mutator, evaluator=evaluator)
 
 
@@ -74,12 +94,17 @@ async def _run_mutator(
     run: dict[str, Any],
     injected: Any | None,
     settings: EvolverSettings,
+    *,
+    loop_scope: LoopModelScope | None = None,
 ) -> AsyncIterator[Any]:
     """生产按 run 解析 owner 凭据；测试注入路径不接管其生命周期。"""
     if injected is not None:
         yield injected
         return
-    owner_mutator = await build_owner_mutator(run, settings)
+    owner_mutator = (
+        await build_owner_mutator(run, settings, loop_scope=loop_scope)
+        if loop_scope is not None else await build_owner_mutator(run, settings)
+    )
     async with get_conn() as conn:
         await runs.clear_credential_grant(conn, run["run_id"])
     try:
