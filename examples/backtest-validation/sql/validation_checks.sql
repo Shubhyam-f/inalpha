@@ -23,10 +23,12 @@ SELECT run_key, initial_cash, metric_initial_cash, initial_cash - metric_initial
 FROM backtest_runs
 WHERE ABS(initial_cash - metric_initial_cash) > 0.00000001;
 
-SELECT run_key, total_return_pct,
-       ((final_equity - metric_initial_cash) / metric_initial_cash) * 100 AS calculated_return_pct
+SELECT 
+    run_key, 
+    total_return_pct,
+    ((CAST(final_equity AS REAL) - CAST(metric_initial_cash AS REAL)) / CAST(metric_initial_cash AS REAL)) * 100.0 AS calculated_return_pct
 FROM backtest_runs
-WHERE ABS(total_return_pct - (((final_equity - metric_initial_cash) / metric_initial_cash) * 100)) > 0.000001;
+WHERE ABS(total_return_pct - (((CAST(final_equity AS REAL) - CAST(metric_initial_cash AS REAL)) / CAST(metric_initial_cash AS REAL)) * 100.0)) > 0.000001;
 
 SELECT run_key, from_ts_utc, to_ts_utc FROM backtest_runs WHERE to_ts_utc <= from_ts_utc;
 SELECT run_key, fee_rate FROM backtest_runs WHERE fee_rate < 0;
