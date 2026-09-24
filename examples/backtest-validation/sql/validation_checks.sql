@@ -33,6 +33,14 @@ SELECT run_key, fee_rate FROM backtest_runs WHERE fee_rate < 0;
 SELECT * FROM backtest_trades WHERE quantity <= 0;
 SELECT * FROM backtest_trades WHERE fill_price IS NOT NULL AND fill_price <= 0;
 
+SELECT run_key, 'missing initial_cash' AS validation_error
+FROM backtest_runs
+WHERE initial_cash IS NULL;
+
+SELECT run_key, 'missing total_return_pct' AS validation_error
+FROM backtest_runs
+WHERE total_return_pct IS NULL;
+
 -- Required fields and invalid denominators
 
 SELECT run_key, 'missing metric_initial_cash' AS validation_error
