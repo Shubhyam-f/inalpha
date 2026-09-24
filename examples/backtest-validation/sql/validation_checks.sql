@@ -33,6 +33,36 @@ SELECT run_key, fee_rate FROM backtest_runs WHERE fee_rate < 0;
 SELECT * FROM backtest_trades WHERE quantity <= 0;
 SELECT * FROM backtest_trades WHERE fill_price IS NOT NULL AND fill_price <= 0;
 
+-- Required fields and invalid denominators
+
+SELECT run_key, 'missing metric_initial_cash' AS validation_error
+FROM backtest_runs
+WHERE metric_initial_cash IS NULL;
+
+SELECT run_key, 'non-positive metric_initial_cash' AS validation_error
+FROM backtest_runs
+WHERE metric_initial_cash <= 0;
+
+SELECT run_key, 'missing reported_num_trades' AS validation_error
+FROM backtest_runs
+WHERE reported_num_trades IS NULL;
+
+SELECT run_key, 'missing total_fees' AS validation_error
+FROM backtest_runs
+WHERE total_fees IS NULL;
+
+SELECT run_key, 'missing final_equity' AS validation_error
+FROM backtest_runs
+WHERE final_equity IS NULL;
+
+SELECT run_key, 'missing timeframe' AS validation_error
+FROM backtest_runs
+WHERE timeframe IS NULL;
+
+SELECT run_key, 'missing num_bars_processed' AS validation_error
+FROM backtest_runs
+WHERE num_bars_processed IS NULL;
+---     ---
 SELECT r.run_key, r.reported_num_trades, r.total_return_pct, r.total_fees
 FROM backtest_runs r LEFT JOIN backtest_trades t ON r.run_key = t.run_key
 GROUP BY r.run_key, r.reported_num_trades, r.total_return_pct, r.total_fees
