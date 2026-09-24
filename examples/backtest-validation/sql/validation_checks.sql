@@ -80,3 +80,91 @@ HAVING COUNT(t.run_key) = 0;
 
 SELECT candidate_key, fitness FROM candidates WHERE fitness < 0;
 SELECT MAX(total_return_pct) AS maximum_return, AVG(total_return_pct) AS average_return, MIN(total_return_pct) AS minimum_return FROM backtest_runs;
+
+-- Annualization: invalid bar counts
+
+SELECT
+    run_key,
+    'missing or non-positive num_bars_processed' AS validation_error
+FROM backtest_runs
+WHERE num_bars_processed IS NULL
+   OR num_bars_processed <= 0;
+
+
+-- Annualization: unsupported timeframe
+
+SELECT
+    run_key,
+    timeframe,
+    'unsupported timeframe for annualization' AS validation_error
+FROM backtest_runs
+WHERE timeframe IS NULL
+   OR timeframe NOT IN (
+       '1m', '3m', '5m', '15m', '30m',
+       '1h', '2h', '4h', '6h', '8h', '12h',
+       '1d', '3d', '1w', '1M'
+   );
+
+
+-- Annualization: reported value vs calculated value
+
+SELECT
+    run_key,
+    timeframe,
+    total_return_pct,
+    annualized_return_pct,
+    (
+        total_return_pct *
+        CASE timeframe
+            WHEN '1m'  THEN 525600
+            WHEN '3m'  THEN 175200
+            WHEN '5m'  THEN 105120
+            WHEN '15m' THEN 35040
+            WHEN '30m' THEN 17520
+            WHEN '1h'  THEN 8760
+            WHEN '2h'  THEN 4380
+            WHEN '4h'  THEN 2190
+            WHEN '6h'  THEN 1460
+            WHEN '8h'  THEN 1095
+            WHEN '12h' THEN 730
+            WHEN '1d'  THEN 365
+            WHEN '3d'  THEN 121
+            WHEN '1w'  THEN 52
+            WHEN '1M'  THEN 12
+        END
+        / (num_bars_processed * 1.0)
+    ) AS calculated_annualized_return_pct
+FROM backtest_runs
+WHERE num_bars_processed > 0
+  AND total_return_pct IS NOT NULL
+  AND annualized_return_pct IS NOT NULL
+  AND timeframe IN (
+      '1m', '3m', '5m', '15m', '30m',
+      '1h', '2h', '4h', '6h', '8h', '12h',
+      '1d', '3d', '1w', '1M'
+  )
+  AND ABS(
+      annualized_return_pct -
+      (
+          total_return_pct *
+          CASE timeframe
+              WHEN '1m'  THEN 525600
+              WHEN '3m'  THEN 175200
+              WHEN '5m'  THEN 105120
+              WHEN '15m' THEN 35040
+              WHEN '30m' THEN 17520
+              WHEN '1h'  THEN 8760
+              WHEN '2h'  THEN 4380
+              WHEN '4h'  THEN 2190
+              WHEN '6h'  THEN 1460
+              WHEN '8h'  THEN 1095
+              WHEN '12h' THEN 730
+              WHEN '1d'  THEN 365
+              WHEN '3d'  THEN 121
+              WHEN '1w'  THEN 52
+              WHEN '1M'  THEN 12
+          END
+          / (num_bars_processed * 1.0)
+      )
+  ) > 0.000001;
+
