@@ -1,5 +1,7 @@
 # Validation Findings
 
+## Public Synthetic Reproduction
+
 | **Validation Query Target** | **Observed Synthetic Result** | **Finding / Status** |
 |---|---|---|
 | **Duplicate Candidate Keys** | `C_DUP` | FAILURE — 1 row returned |
@@ -26,3 +28,20 @@
 | **Annualized Return mismatch** | `R_ANN_ERR` (reported: 99.9, calculated: 10.0) | FAILURE — 1 row returned |
 | **Valid control case** | `R_VALID` (total return: 10.0, annualized return: 10.0) | PASS — reconciliation successful |
 | **Path-dependent risk metrics** | Sharpe, Sortino, annualized volatility, maximum drawdown, drawdown duration | NOT INDEPENDENTLY VALIDATABLE — requires per-bar equity curve |
+
+## Private Snapshot Validation
+
+The same validation framework was also applied to the private sanitized snapshot supplied for the issue.
+
+The private snapshot contained:
+
+- 57 strategy candidates
+- 56 completed backtest runs
+- 1,425 simulated fills
+- 44 runs containing fills
+- 12 runs without fills
+- 53 candidates with a latest backtest run reference
+
+These results are **private snapshot findings only**. They are not independently reproduced by the public synthetic fixture and should not be interpreted as proof of the underlying engine's calculations.
+
+The public repository contains only the reproducible validation logic and synthetic data required to exercise the checks. Private CSV rows, PBIX files, internal identifiers, account information, credentials, and production connection details are excluded.
