@@ -40,5 +40,3 @@ HAVING COUNT(t.run_key) = 0;
 
 SELECT candidate_key, fitness FROM candidates WHERE fitness < 0;
 SELECT MAX(total_return_pct) AS maximum_return, AVG(total_return_pct) AS average_return, MIN(total_return_pct) AS minimum_return FROM backtest_runs;
-
-docs(data): add SQL validation checks
