@@ -27,18 +27,19 @@ C_ORPHAN,2.00
 C_BAD_FIT,-5.00
 """
 
-backtest_runs_data = """run_key,candidate_key,reported_num_trades,total_fees,initial_cash,metric_initial_cash,final_equity,total_return_pct,from_ts_utc,to_ts_utc,fee_rate,timeframe,num_bars_processed,annualized_return_pct
-R_VALID,C_VALID,2,2.00,10000.50,10000.50,11000.55,10.0,2023-01-01,2023-12-31,0.001,1d,365,10.0
-R_DUP_RUN,C_VALID,1,1.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
-R_DUP_RUN,C_VALID,1,1.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
-R_ZERO_FILL,C_VALID,0,0.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
-R_DUP_TRADE,C_VALID,2,2.00,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
-R_ORPHAN,C_MISSING,1,1.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
-R_BAD_MATH,C_VALID,5,10.0,10000.0,5000.0,20000.0,99.0,2024-01-01,2023-01-01,-0.05,7d,-10,0.0
-R_BAD_TF,C_VALID,1,1.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,2d,10,0.0
-R_NULLS,C_VALID,,,,,,,,,,,,
-R_ZERO_CASH,C_VALID,1,1.0,0.0,0.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
-R_ANN_ERR,C_VALID,1,1.0,10000.0,10000.0,11000.0,10.0,2023-01-01,2023-12-31,0.0,1d,365,99.9
+backtest_runs_data = """run_key,candidate_key,venue,reported_num_trades,total_fees,initial_cash,metric_initial_cash,final_equity,total_return_pct,from_ts_utc,to_ts_utc,fee_rate,timeframe,num_bars_processed,annualized_return_pct
+R_VALID,C_VALID,crypto,2,2.00,10000.50,10000.50,11000.55,10.0,2023-01-01,2023-12-31,0.001,1d,365,10.0
+R_DUP_RUN,C_VALID,crypto,1,1.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
+R_DUP_RUN,C_VALID,crypto,1,1.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
+R_ZERO_FILL,C_VALID,crypto,0,0.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
+R_DUP_TRADE,C_VALID,crypto,2,2.00,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
+R_ORPHAN,C_MISSING,crypto,1,1.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
+R_BAD_MATH,C_VALID,crypto,5,10.0,10000.0,5000.0,20000.0,99.0,2024-01-01,2023-01-01,-0.05,7d,-10,0.0
+R_BAD_TF,C_VALID,crypto,1,1.0,1000.0,1000.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,2d,10,0.0
+R_NULLS,C_VALID,crypto,,,,,,,,,,,,
+R_ZERO_CASH,C_VALID,crypto,1,1.0,0.0,0.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
+R_ANN_ERR,C_VALID,crypto,1,1.0,10000.0,10000.0,11000.0,10.0,2023-01-01,2023-12-31,0.0,1d,365,99.9
+R_NONCRYPTO_CONTROL,C_VALID,NSE,1,1.0,10000.0,10000.0,11000.0,10.0,2023-01-01,2023-12-31,0.0,1d,252,10.0
 """
 
 backtest_trades_data = """run_key,seq,quantity,fill_price,fee,realized_pnl
@@ -52,6 +53,7 @@ R_BAD_MATH,1,-5.0,-10.0,2.0,-50.0
 R_BAD_TF,1,1.0,100.0,1.0,10.0
 R_ZERO_CASH,1,1.0,100.0,1.0,10.0
 R_ANN_ERR,1,1.0,100.0,1.0,10.0
+R_NONCRYPTO_CONTROL,1,1.0,100.0,1.0,10.0
 R_MISSING_RUN,1,1.0,1.0,0.0,0.0
 """
 
@@ -91,6 +93,7 @@ cursor.execute("""
 CREATE TABLE backtest_runs (
     run_key TEXT,
     candidate_key TEXT,
+    venue TEXT,
     reported_num_trades INTEGER,
     total_fees REAL,
     initial_cash REAL,
@@ -150,6 +153,7 @@ with open(backtest_runs_csv, "r", encoding="utf-8", newline="") as f:
         rows.append((
             row["run_key"],
             row["candidate_key"],
+            row["venue"] or None,
             int(row["reported_num_trades"])
                 if row["reported_num_trades"] else None,
             float(row["total_fees"])
@@ -179,6 +183,7 @@ with open(backtest_runs_csv, "r", encoding="utf-8", newline="") as f:
         (
             run_key,
             candidate_key,
+            venue,
             reported_num_trades,
             total_fees,
             initial_cash,
@@ -192,7 +197,7 @@ with open(backtest_runs_csv, "r", encoding="utf-8", newline="") as f:
             num_bars_processed,
             annualized_return_pct
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         rows
     )
