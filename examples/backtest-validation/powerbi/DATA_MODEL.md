@@ -291,3 +291,225 @@ It does not claim that Power BI independently validates:
 - referential integrity.
 
 Those checks are implemented separately in the SQL validation layer.
+
+## Dashboard Field Provenance and Filter Context
+
+The Power BI dashboard uses fields from different levels of the underlying
+three-table model.
+
+This is important because the model is hierarchical:
+
+```text
+candidates
+    │
+    │ 1 → *
+    ▼
+backtest_runs
+    │
+    │ 1 → *
+    ▼
+backtest_trades
+```
+
+The dashboard therefore deliberately combines candidate-level, run-level, and
+trade/fill-level fields.
+
+### Dashboard Field Mapping
+
+| Dashboard element | Source table | Source field |
+|---|---|---|
+| Candidate number | `candidates` | `candidate_key` |
+| Run key | `backtest_trades` | `run_key` |
+| Total Fee | `backtest_runs` | `total_fees` |
+| Win Rate | `backtest_runs` | `win_rate` |
+| Fitness | `candidates` | `fitness` |
+| Line chart | `backtest_trades` | Trade/fill-level fields |
+| Pie chart | `backtest_trades` | Trade/fill-level fields |
+
+The exact fields used by the trade-level visuals are drawn from the
+`backtest_trades` table, allowing the dashboard to examine the underlying
+fill-level activity.
+
+---
+
+## Candidate-Level Fields
+
+The candidate number displayed by the dashboard comes from:
+
+```text
+candidates[candidate_key]
+```
+
+This represents the strategy-candidate level of the model.
+
+Candidate-level fields can therefore be used to identify and filter the
+strategy candidate associated with the analytical context.
+
+The dashboard also uses:
+
+```text
+candidates[fitness]
+```
+
+for the displayed fitness value.
+
+---
+
+## Run-Level Fields
+
+Run-level information is sourced from `backtest_runs`.
+
+The dashboard uses:
+
+```text
+backtest_runs[total_fees]
+backtest_runs[win_rate]
+```
+
+for the corresponding run-level metrics.
+
+These fields describe the selected backtest run rather than individual trade
+records.
+
+---
+
+## Trade-Level Fields
+
+The trade/fill-level analysis is sourced from `backtest_trades`.
+
+The dashboard uses trade-level data for the line chart and pie chart.
+
+This includes the underlying fill information such as:
+
+- `realized_pnl`
+- `fee`
+- `fill_price`
+- `quantity`
+- `seq`
+- `side`
+- `intent`
+- `order_type`
+- `bar_ts_utc`
+- `bar_close`
+
+The exact fields displayed by each visual can therefore be interpreted in the
+context of an individual backtest run's underlying trade/fill records.
+
+---
+
+## Filter Direction and Field Provenance
+
+The model uses parent-to-child filtering:
+
+```text
+candidates
+    ↓
+backtest_runs
+    ↓
+backtest_trades
+```
+
+This means that filtering a parent table can propagate to its child table.
+
+For example:
+
+```text
+candidate_key
+     ↓
+backtest_runs
+     ↓
+backtest_trades
+```
+
+A candidate-level selection can therefore restrict the associated runs and
+their underlying trades.
+
+Similarly:
+
+```text
+run
+ ↓
+backtest_trades
+```
+
+allows a selected backtest run to restrict the trade/fill records belonging to
+that run.
+
+The distinction between source tables is intentionally preserved rather than
+flattening all dashboard fields into a single table.
+
+---
+
+## Why Field Provenance Matters
+
+The dashboard combines information from three different levels:
+
+```text
+Candidate-level
+    │
+    ├── candidate_key
+    └── fitness
+         │
+         ▼
+Run-level
+    │
+    ├── total_fees
+    └── win_rate
+         │
+         ▼
+Trade-level
+    │
+    ├── realized_pnl
+    ├── fee
+    ├── fill_price
+    ├── quantity
+    └── other fill-level fields
+```
+
+This structure allows the dashboard to move between:
+
+1. identifying the strategy candidate;
+2. examining the associated backtest run;
+3. inspecting the underlying simulated fills.
+
+The dashboard should therefore be understood as a relational analytical view
+of the backtest data rather than as a standalone flattened dataset.
+
+---
+
+## Analytical vs. Validation Responsibility
+
+The dashboard does not independently validate the consistency of the fields
+it displays.
+
+For example, the dashboard can display:
+
+- reported total fees from `backtest_runs`;
+- realized P&L from `backtest_trades`;
+- reported win rate from `backtest_runs`;
+- candidate fitness from `candidates`.
+
+The SQL validation layer is responsible for determining whether reported and
+derived values are internally consistent.
+
+This distinction is intentional:
+
+```text
+SQL
+│
+├── Validate
+├── Detect inconsistencies
+└── Report exceptions
+        │
+        ▼
+Power BI
+│
+├── Filter
+├── Aggregate
+├── Decompose
+├── Visualize
+└── Drill through
+```
+
+Power BI therefore provides the analytical interface over the validated data
+rather than duplicating the validation logic.
