@@ -291,13 +291,12 @@ It does not claim that Power BI independently validates:
 - referential integrity.
 
 Those checks are implemented separately in the SQL validation layer.
+## Dashboard Field Provenance and Analytical Context
 
-## Dashboard Field Provenance and Filter Context
+The Power BI dashboard combines fields from the three tables according to the
+level of analysis required by each visual.
 
-The Power BI dashboard uses fields from different levels of the underlying
-three-table model.
-
-This is important because the model is hierarchical:
+The model itself follows the relational hierarchy:
 
 ```text
 candidates
@@ -311,8 +310,8 @@ backtest_runs
 backtest_trades
 ```
 
-The dashboard therefore deliberately combines candidate-level, run-level, and
-trade/fill-level fields.
+However, the report's navigation and drill-through behavior also use the
+analytical context selected in the decomposition tree.
 
 ### Dashboard Field Mapping
 
@@ -326,80 +325,88 @@ trade/fill-level fields.
 | Line chart | `backtest_trades` | Trade/fill-level fields |
 | Pie chart | `backtest_trades` | Trade/fill-level fields |
 
-The exact fields used by the trade-level visuals are drawn from the
-`backtest_trades` table, allowing the dashboard to examine the underlying
-fill-level activity.
+The line and pie visuals use the underlying trade/fill-level data from
+`backtest_trades`.
 
 ---
 
-## Candidate-Level Fields
+## Decomposition Tree as the Main Analytical Driver
 
-The candidate number displayed by the dashboard comes from:
+The main lineage dashboard uses a decomposition tree with **Sum of
+`realized_pnl`** as the primary analytical value.
 
-```text
-candidates[candidate_key]
-```
-
-This represents the strategy-candidate level of the model.
-
-Candidate-level fields can therefore be used to identify and filter the
-strategy candidate associated with the analytical context.
-
-The dashboard also uses:
+The tree can be explored through dimensions including:
 
 ```text
-candidates[fitness]
+candidate_key
+    ↓
+run_key
+    ↓
+symbol
+    ↓
+timeframe
 ```
 
-for the displayed fitness value.
+The decomposition tree is the main mechanism through which the user explores
+the candidate → run → instrument/timeframe lineage.
+
+A selected node in the tree establishes the analytical context for the
+selected result.
 
 ---
 
-## Run-Level Fields
+## Drill-Through Context
 
-Run-level information is sourced from `backtest_runs`.
+The report provides a navigation action from the decomposition tree to the
+**Basic Details** page.
 
-The dashboard uses:
+The workflow is:
 
 ```text
-backtest_runs[total_fees]
-backtest_runs[win_rate]
+Select a node in the decomposition tree
+                │
+                ▼
+     Select "See this in the
+       Basic Details page"
+                │
+                ▼
+        Navigate to Basic Details
+                │
+                ▼
+ Selected candidate/run context is
+       already applied as a filter
 ```
 
-for the corresponding run-level metrics.
+The Basic Details page therefore does not require the user to manually
+reconstruct the selected candidate or run.
 
-These fields describe the selected backtest run rather than individual trade
+The selected context from the main analytical view is carried into the
+detailed page through the report's drill-through/navigation setup.
+
+This is important because the Basic Details page can then display run-level
+and trade-level information specifically for the selected analytical result.
+
+---
+
+## Run Key Provenance
+
+The run key used by the lineage analysis is sourced from:
+
+```text
+backtest_trades[run_key]
+```
+
+This is appropriate for the decomposition-tree workflow because the tree is
+ultimately tracing the realized P&L represented by the underlying trade/fill
 records.
 
----
+The selected trade-level run context is then carried into the Basic Details
+page through the configured drill-through/navigation behavior.
 
-## Trade-Level Fields
+The report therefore does not depend on reversing the normal parent-to-child
+relationship direction merely to make the drill-through work.
 
-The trade/fill-level analysis is sourced from `backtest_trades`.
-
-The dashboard uses trade-level data for the line chart and pie chart.
-
-This includes the underlying fill information such as:
-
-- `realized_pnl`
-- `fee`
-- `fill_price`
-- `quantity`
-- `seq`
-- `side`
-- `intent`
-- `order_type`
-- `bar_ts_utc`
-- `bar_close`
-
-The exact fields displayed by each visual can therefore be interpreted in the
-context of an individual backtest run's underlying trade/fill records.
-
----
-
-## Filter Direction and Field Provenance
-
-The model uses parent-to-child filtering:
+The relationship direction remains:
 
 ```text
 candidates
@@ -409,107 +416,123 @@ backtest_runs
 backtest_trades
 ```
 
-This means that filtering a parent table can propagate to its child table.
-
-For example:
-
-```text
-candidate_key
-     ↓
-backtest_runs
-     ↓
-backtest_trades
-```
-
-A candidate-level selection can therefore restrict the associated runs and
-their underlying trades.
-
-Similarly:
-
-```text
-run
- ↓
-backtest_trades
-```
-
-allows a selected backtest run to restrict the trade/fill records belonging to
-that run.
-
-The distinction between source tables is intentionally preserved rather than
-flattening all dashboard fields into a single table.
+while the decomposition-tree selection and drill-through mechanism provide the
+selected analytical context used by the detailed page.
 
 ---
 
-## Why Field Provenance Matters
+## Basic Details Filtering
 
-The dashboard combines information from three different levels:
+Once the user navigates to Basic Details from the selected tree result, the
+page is already filtered to the relevant context.
 
-```text
-Candidate-level
-    │
-    ├── candidate_key
-    └── fitness
-         │
-         ▼
-Run-level
-    │
-    ├── total_fees
-    └── win_rate
-         │
-         ▼
-Trade-level
-    │
-    ├── realized_pnl
-    ├── fee
-    ├── fill_price
-    ├── quantity
-    └── other fill-level fields
-```
+The user can therefore immediately inspect:
 
-This structure allows the dashboard to move between:
+- candidate number;
+- run key;
+- total realized P&L;
+- total fees;
+- total fills;
+- win rate;
+- fitness;
+- fill sequence;
+- realized P&L;
+- fees;
+- price information.
 
-1. identifying the strategy candidate;
-2. examining the associated backtest run;
-3. inspecting the underlying simulated fills.
+The page is intended to answer:
 
-The dashboard should therefore be understood as a relational analytical view
-of the backtest data rather than as a standalone flattened dataset.
+> "Why did this selected candidate/run produce this result?"
+
+rather than requiring the user to manually search through the complete dataset.
 
 ---
 
-## Analytical vs. Validation Responsibility
+## Dashboard Visuals
 
-The dashboard does not independently validate the consistency of the fields
-it displays.
+The main dashboard consists of:
 
-For example, the dashboard can display:
+### Decomposition Tree
 
-- reported total fees from `backtest_runs`;
-- realized P&L from `backtest_trades`;
-- reported win rate from `backtest_runs`;
-- candidate fitness from `candidates`.
+Used for hierarchical exploration of realized P&L across candidate, run,
+symbol, and timeframe dimensions.
 
-The SQL validation layer is responsible for determining whether reported and
-derived values are internally consistent.
+### Line Chart
 
-This distinction is intentional:
+Uses trade/fill-level fields from `backtest_trades` to visualize the selected
+run's underlying activity across the fill sequence.
+
+### Pie Chart
+
+Uses trade/fill-level fields from `backtest_trades` to provide an additional
+aggregate visual view of the selected trade/fill data.
+
+The report also provides navigation between the main lineage dashboard and the
+Basic Details page.
+
+---
+
+## Filter and Navigation Model
+
+The analytical workflow can therefore be summarized as:
 
 ```text
-SQL
-│
-├── Validate
-├── Detect inconsistencies
-└── Report exceptions
-        │
-        ▼
-Power BI
-│
-├── Filter
-├── Aggregate
-├── Decompose
-├── Visualize
-└── Drill through
+                    candidates
+                        │
+                        ▼
+                  backtest_runs
+                        │
+                        ▼
+                 backtest_trades
+                        │
+                        ▼
+              Realized P&L analysis
+                        │
+                        ▼
+               Decomposition Tree
+                        │
+              ┌─────────┴─────────┐
+              ▼                   ▼
+        Candidate node         Run node
+              │                   │
+              └─────────┬─────────┘
+                        ▼
+              Drill-through action
+                        │
+                        ▼
+                  Basic Details
+                        │
+                        ▼
+              Selected context retained
 ```
 
-Power BI therefore provides the analytical interface over the validated data
-rather than duplicating the validation logic.
+This combines the relational model with Power BI's analytical selection and
+drill-through capabilities.
+
+---
+
+## Scope
+
+The dashboard is intentionally an analytical interface rather than a second
+validation implementation.
+
+Power BI is responsible for:
+
+- filtering;
+- aggregation;
+- decomposition;
+- visualization;
+- analytical navigation;
+- drill-through exploration.
+
+The SQL validation layer remains responsible for:
+
+- data-quality checks;
+- relationship validation;
+- metric consistency;
+- missing-value checks;
+- annualization validation;
+- validation exceptions.
+
+The two layers therefore have separate responsibilities and do not duplicate
+the same validation logic.
