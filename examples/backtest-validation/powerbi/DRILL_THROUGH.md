@@ -297,3 +297,5 @@ Fill sequence
 
 The Power BI report therefore complements the SQL validation layer rather than
 duplicating it.
+
+Realized P&L is used as the primary analytical value because it is recorded at the trade/fill level in backtest_trades. Summing it allows the decomposition tree to trace the realized trading result through candidate, run, symbol, and timeframe before drilling into the underlying fill sequence. Other run-level performance metrics remain available as contextual fields rather than being independently reconstructed in DAX.
