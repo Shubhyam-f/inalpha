@@ -41,18 +41,18 @@ R_ZERO_CASH,C_VALID,1,1.0,0.0,0.0,1000.0,0.0,2023-01-01,2023-12-31,0.0,1d,10,0.0
 R_ANN_ERR,C_VALID,1,1.0,10000.0,10000.0,11000.0,10.0,2023-01-01,2023-12-31,0.0,1d,365,99.9
 """
 
-backtest_trades_data = """run_key,seq,quantity,fill_price,fee
-R_VALID,1,5.0,100.0,1.0
-R_VALID,2,5.0,110.0,1.0
-R_DUP_RUN,1,1.0,100.0,1.0
-R_DUP_TRADE,1,1.0,1.0,1.0
-R_DUP_TRADE,1,1.0,1.0,1.0
-R_ORPHAN,1,1.0,100.0,1.0
-R_BAD_MATH,1,-5.0,-10.0,2.0
-R_BAD_TF,1,1.0,100.0,1.0
-R_ZERO_CASH,1,1.0,100.0,1.0
-R_ANN_ERR,1,1.0,100.0,1.0
-R_MISSING_RUN,1,1.0,1.0,0.0
+backtest_trades_data = """run_key,seq,quantity,fill_price,fee,realized_pnl
+R_VALID,1,5.0,100.0,1.0,50.0
+R_VALID,2,5.0,110.0,1.0,50.0
+R_DUP_RUN,1,1.0,100.0,1.0,10.0
+R_DUP_TRADE,1,1.0,1.0,1.0,0.0
+R_DUP_TRADE,1,1.0,1.0,1.0,0.0
+R_ORPHAN,1,1.0,100.0,1.0,10.0
+R_BAD_MATH,1,-5.0,-10.0,2.0,-50.0
+R_BAD_TF,1,1.0,100.0,1.0,10.0
+R_ZERO_CASH,1,1.0,100.0,1.0,10.0
+R_ANN_ERR,1,1.0,100.0,1.0,10.0
+R_MISSING_RUN,1,1.0,1.0,0.0,0.0
 """
 
 
@@ -112,7 +112,8 @@ CREATE TABLE backtest_trades (
     seq INTEGER,
     quantity REAL,
     fill_price REAL,
-    fee REAL
+    fee REAL,
+    realized_pnl REAL
 );
 """)
 
@@ -149,23 +150,27 @@ with open(backtest_runs_csv, "r", encoding="utf-8", newline="") as f:
         rows.append((
             row["run_key"],
             row["candidate_key"],
-            int(row["reported_num_trades"]
-                ) if row["reported_num_trades"] else None,
-            float(row["total_fees"]) if row["total_fees"] else None,
-            float(row["initial_cash"]) if row["initial_cash"] else None,
-            float(row["metric_initial_cash"]
-                  ) if row["metric_initial_cash"] else None,
-            float(row["final_equity"]) if row["final_equity"] else None,
-            float(row["total_return_pct"]
-                  ) if row["total_return_pct"] else None,
+            int(row["reported_num_trades"])
+                if row["reported_num_trades"] else None,
+            float(row["total_fees"])
+                if row["total_fees"] else None,
+            float(row["initial_cash"])
+                if row["initial_cash"] else None,
+            float(row["metric_initial_cash"])
+                if row["metric_initial_cash"] else None,
+            float(row["final_equity"])
+                if row["final_equity"] else None,
+            float(row["total_return_pct"])
+                if row["total_return_pct"] else None,
             row["from_ts_utc"] or None,
             row["to_ts_utc"] or None,
-            float(row["fee_rate"]) if row["fee_rate"] else None,
+            float(row["fee_rate"])
+                if row["fee_rate"] else None,
             row["timeframe"] or None,
-            int(row["num_bars_processed"]
-                ) if row["num_bars_processed"] else None,
-            float(row["annualized_return_pct"]
-                  ) if row["annualized_return_pct"] else None
+            int(row["num_bars_processed"])
+                if row["num_bars_processed"] else None,
+            float(row["annualized_return_pct"])
+                if row["annualized_return_pct"] else None
         ))
 
     cursor.executemany(
@@ -204,7 +209,8 @@ with open(backtest_trades_csv, "r", encoding="utf-8", newline="") as f:
             int(row["seq"]),
             float(row["quantity"]),
             float(row["fill_price"]),
-            float(row["fee"])
+            float(row["fee"]),
+            float(row["realized_pnl"])
         ))
 
     cursor.executemany(
@@ -215,9 +221,10 @@ with open(backtest_trades_csv, "r", encoding="utf-8", newline="") as f:
             seq,
             quantity,
             fill_price,
-            fee
+            fee,
+            realized_pnl
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         rows
     )
