@@ -335,67 +335,81 @@ WHERE timeframe IS NULL
    );
 
 
--- Annualization: reported value vs calculated value
--- NOTE: This section will be made market-aware in the next step.
+-- Annualization: non-crypto runs without an exchange-calendar factor
+-- Informational: these runs are not independently checkable from the
+-- crypto annualization factors alone.
+--
+-- A valid exchange-calendar factor must be supplied before these runs
+-- can be reconciled.
+
+SELECT
+    'INFORMATIONAL: non-crypto annualization uncheckable without exchange-calendar factor' AS validation_check,
+    run_key,
+    venue,
+    timeframe,
+    num_bars_processed,
+    total_return_pct,
+    annualized_return_pct,
+    'exchange-calendar annualization factor required' AS validation_status
+FROM backtest_runs
+WHERE LOWER(COALESCE(venue, '')) <> 'crypto'
+  AND num_bars_processed > 0
+  AND total_return_pct IS NOT NULL
+  AND annualized_return_pct IS NOT NULL;
+
+
+-- Annualization: crypto reported value vs calculated value
+--
+-- Crypto uses 24/7 annualization factors.
+-- Formula:
+-- annualized_return_pct =
+-- total_return_pct * annualization_factor / num_bars_processed
+--
+-- This is linear annualization, not CAGR.
 
 
 SELECT
     'VALIDATION FAILURE: annualized return mismatch' AS validation_check,
-    run_key,
-    timeframe,
-    total_return_pct,
-    annualized_return_pct,
-    (
-        total_return_pct *
-        CASE timeframe
-            WHEN '1m'  THEN 525600
-            WHEN '3m'  THEN 175200
-            WHEN '5m'  THEN 105120
-            WHEN '15m' THEN 35040
-            WHEN '30m' THEN 17520
-            WHEN '1h'  THEN 8760
-            WHEN '2h'  THEN 4380
-            WHEN '4h'  THEN 2190
-            WHEN '6h'  THEN 1460
-            WHEN '8h'  THEN 1095
-            WHEN '12h' THEN 730
-            WHEN '1d' THEN 365
-            WHEN '3d' THEN 121
-            WHEN '1w' THEN 52
-            WHEN '1M' THEN 12
-        END
-        / (num_bars_processed * 1.0)
+    r.run_key,
+    r.venue,
+    r.timeframe,
+    r.num_bars_processed,
+    r.total_return_pct,
+    r.annualized_return_pct,
+    ROUND(
+        r.total_return_pct *
+        af.annualization_factor /
+        (r.num_bars_processed * 1.0),
+        4
     ) AS calculated_annualized_return_pct
-FROM backtest_runs
-WHERE num_bars_processed > 0
-  AND total_return_pct IS NOT NULL
-  AND annualized_return_pct IS NOT NULL
-  AND timeframe IN (
-      '1m', '3m', '5m', '15m', '30m',
-      '1h', '2h', '4h', '6h', '8h', '12h',
-      '1d', '3d', '1w', '1M'
-  )
+FROM backtest_runs r
+JOIN (
+    SELECT '1m' AS timeframe, 525600 AS annualization_factor
+    UNION ALL SELECT '3m', 175200
+    UNION ALL SELECT '5m', 105120
+    UNION ALL SELECT '15m', 35040
+    UNION ALL SELECT '30m', 17520
+    UNION ALL SELECT '1h', 8760
+    UNION ALL SELECT '2h', 4380
+    UNION ALL SELECT '4h', 2190
+    UNION ALL SELECT '6h', 1460
+    UNION ALL SELECT '8h', 1095
+    UNION ALL SELECT '12h', 730
+    UNION ALL SELECT '1d', 365
+    UNION ALL SELECT '3d', 121
+    UNION ALL SELECT '1w', 52
+    UNION ALL SELECT '1M', 12
+) af
+    ON r.timeframe = af.timeframe
+WHERE LOWER(COALESCE(r.venue, '')) = 'crypto'
+  AND r.num_bars_processed > 0
+  AND r.total_return_pct IS NOT NULL
+  AND r.annualized_return_pct IS NOT NULL
   AND ABS(
-      annualized_return_pct -
+      r.annualized_return_pct -
       (
-          total_return_pct *
-          CASE timeframe
-              WHEN '1m'  THEN 525600
-              WHEN '3m'  THEN 175200
-              WHEN '5m' THEN 105120
-              WHEN '15m' THEN 35040
-              WHEN '30m' THEN 17520
-              WHEN '1h' THEN 8760
-              WHEN '2h' THEN 4380
-              WHEN '4h' THEN 2190
-              WHEN '6h' THEN 1460
-              WHEN '8h' THEN 1095
-              WHEN '12h' THEN 730
-              WHEN '1d' THEN 365
-              WHEN '3d' THEN 121
-              WHEN '1w' THEN 52
-              WHEN '1M' THEN 12
-          END
-          / (num_bars_processed * 1.0)
+          r.total_return_pct *
+          af.annualization_factor /
+          (r.num_bars_processed * 1.0)
       )
   ) > 0.000001;
