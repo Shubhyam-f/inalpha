@@ -53,10 +53,15 @@ HAVING COUNT(*) > 1;
 
 -- ============================================================
 -- 4. CANDIDATE WITHOUT A BACKTEST RUN
+--
+-- Informational only.
+-- A candidate may legitimately exist before or without a backtest.
+-- Broken run-to-candidate references remain a validation failure
+-- in check #5.
 -- ============================================================
 
 SELECT
-    'VALIDATION FAILURE: candidate has no backtest run' AS validation_check,
+    'INFORMATIONAL: candidate has no backtest run' AS validation_check,
     c.candidate_key
 FROM candidates c
 LEFT JOIN backtest_runs r
@@ -444,9 +449,12 @@ WHERE timeframe IS NULL
 -- ============================================================
 -- 29. NON-CRYPTO ANNUALIZATION
 --
--- Non-crypto annualization depends on the applicable exchange
--- calendar. Without a supplied exchange-calendar factor, this
--- check is informational rather than a failure.
+-- Within this validation scope, binance is the crypto venue
+-- treated as 24/7. Other venues require the applicable
+-- exchange-calendar factor.
+--
+-- Without a supplied exchange-calendar factor, this check is
+-- informational rather than a failure.
 -- ============================================================
 
 SELECT
@@ -461,7 +469,7 @@ SELECT
     'exchange-calendar annualization factor required'
         AS validation_status
 FROM backtest_runs
-WHERE LOWER(COALESCE(venue, '')) <> 'crypto'
+WHERE LOWER(COALESCE(venue, '')) <> 'binance'
   AND num_bars_processed > 0
   AND total_return_pct IS NOT NULL
   AND annualized_return_pct IS NOT NULL;
@@ -469,6 +477,9 @@ WHERE LOWER(COALESCE(venue, '')) <> 'crypto'
 
 -- ============================================================
 -- 30. CRYPTO ANNUALIZED RETURN MISMATCH
+--
+-- Within this validation scope, binance is the crypto venue
+-- treated as 24/7.
 --
 -- Annualization convention:
 --
@@ -515,7 +526,7 @@ JOIN (
     UNION ALL SELECT '1M', 12
 ) af
     ON r.timeframe = af.timeframe
-WHERE LOWER(COALESCE(r.venue, '')) = 'crypto'
+WHERE LOWER(COALESCE(r.venue, '')) = 'binance'
   AND r.num_bars_processed > 0
   AND r.total_return_pct IS NOT NULL
   AND r.annualized_return_pct IS NOT NULL
