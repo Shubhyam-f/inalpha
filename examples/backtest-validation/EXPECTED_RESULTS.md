@@ -11,11 +11,11 @@ validation failures.
 
 ## Result Conventions
 
-| Result type | Meaning |
-|---|---|
+| Result type            | Meaning                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------- |
 | **VALIDATION FAILURE** | The query identifies a data-quality or consistency condition that should be investigated. |
-| **INFORMATIONAL** | The query provides diagnostic context and does not constitute a validation failure. |
-| `NULL` | The value is missing or unavailable. It is not treated as zero. |
+| **INFORMATIONAL**      | The query provides diagnostic context and does not constitute a validation failure.       |
+| `NULL`                 | The value is missing or unavailable. It is not treated as zero.                           |
 
 The validation queries deliberately separate **missing values** from
 **inconsistent values**.
@@ -24,38 +24,38 @@ The validation queries deliberately separate **missing values** from
 
 ## Expected Results
 
-| # | Validation Check | Synthetic Trigger | Expected Result |
-|---:|---|---|---|
-| 1 | Duplicate candidate keys | `C_DUP` | **FAILURE** — 1 row; `C_DUP` occurs 2 times |
-| 2 | Duplicate run keys | `R_DUP_RUN` | **FAILURE** — 1 row; `R_DUP_RUN` occurs 2 times |
-| 3 | Duplicate trade keys | `R_DUP_TRADE`, `seq = 1` | **FAILURE** — 1 row; duplicate key occurs 2 times |
-| 4 | Candidate without backtest run | `C_DUP`, `C_ORPHAN`, `C_BAD_FIT` | **FAILURE** — 4 rows; `C_DUP` appears twice because the fixture intentionally contains two identical candidate rows |
-| 5 | Run without candidate | `R_ORPHAN` | **FAILURE** — 1 row |
-| 6 | Trade without run | `R_MISSING_RUN` | **FAILURE** — 1 row |
-| 7 | Reported trade count mismatch | `R_DUP_RUN`, `R_BAD_MATH` | **FAILURE** — 2 rows |
-| 8 | Reported total fees mismatch | `R_DUP_RUN`, `R_BAD_MATH` | **FAILURE** — 2 rows |
-| 9 | Initial cash vs. `metric_initial_cash` mismatch | `R_BAD_MATH` | **FAILURE** — 1 row |
-| 10 | `total_return_pct` calculation mismatch | `R_BAD_MATH` | **FAILURE** — 1 row; reported `99%`, calculated `300%` |
-| 11 | Invalid date range | `R_BAD_MATH` | **FAILURE** — 1 row |
-| 12 | Negative fee rate | `R_BAD_MATH` | **FAILURE** — 1 row; `fee_rate = -0.05` |
-| 13 | Non-positive quantity | `R_BAD_MATH`, `seq = 1` | **FAILURE** — 1 row; quantity `-5.0` |
-| 14 | Non-positive fill price | `R_BAD_MATH`, `seq = 1` | **FAILURE** — 1 row; fill price `-10.0` |
-| 15 | Missing `initial_cash` | `R_NULLS` | **FAILURE** — 1 row |
-| 16 | Missing `metric_initial_cash` | `R_NULLS` | **FAILURE** — 1 row |
-| 17 | Missing `reported_num_trades` | `R_NULLS` | **FAILURE** — 1 row |
-| 18 | Missing `total_fees` | `R_NULLS` | **FAILURE** — 1 row |
-| 19 | Missing `final_equity` | `R_NULLS` | **FAILURE** — 1 row |
-| 20 | Missing `timeframe` | `R_NULLS` | **FAILURE** — 1 row |
-| 21 | Missing `num_bars_processed` | `R_NULLS` | **FAILURE** — 1 row |
-| 22 | Missing `total_return_pct` | `R_NULLS` | **FAILURE** — 1 row |
-| 23 | Non-positive `metric_initial_cash` | `R_ZERO_CASH` | **FAILURE** — 1 row; value `0.0` |
-| 24 | Zero actual trades | `R_ZERO_FILL`, `R_NULLS` | **INFORMATIONAL** — 2 rows |
-| 25 | Negative fitness | `C_BAD_FIT` | **FAILURE** — 1 row; fitness `-5.0` |
-| 26 | Global return summary | All runs with non-null `total_return_pct` | **INFORMATIONAL** — 1 aggregate row |
-| 27 | Invalid `num_bars_processed` | `R_BAD_MATH`, `R_NULLS` | **FAILURE** — 2 rows |
-| 28 | Unsupported timeframe | `R_BAD_MATH`, `R_BAD_TF`, `R_NULLS` | **FAILURE** — 3 rows |
-| 29 | Non-crypto annualization | `R_NONCRYPTO_CONTROL` | **INFORMATIONAL** — 1 row; exchange-calendar factor is not supplied |
-| 30 | Crypto annualized return mismatch | `R_ANN_ERR` | **FAILURE** — 1 row; reported `99.9%`, calculated `10.0%` |
+|  # | Validation Check                                | Synthetic Trigger                         | Expected Result                                                                                                           |
+| -: | ----------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+|  1 | Duplicate candidate keys                        | `C_DUP`                                   | **FAILURE** — 1 row; `C_DUP` occurs 2 times                                                                               |
+|  2 | Duplicate run keys                              | `R_DUP_RUN`                               | **FAILURE** — 1 row; `R_DUP_RUN` occurs 2 times                                                                           |
+|  3 | Duplicate trade keys                            | `R_DUP_TRADE`, `seq = 1`                  | **FAILURE** — 1 row; duplicate key occurs 2 times                                                                         |
+|  4 | Candidate without backtest run                  | `C_DUP`, `C_ORPHAN`, `C_BAD_FIT`          | **INFORMATIONAL** — 4 rows; `C_DUP` appears twice because the fixture intentionally contains two identical candidate rows |
+|  5 | Run without candidate                           | `R_ORPHAN`                                | **FAILURE** — 1 row                                                                                                       |
+|  6 | Trade without run                               | `R_MISSING_RUN`                           | **FAILURE** — 1 row                                                                                                       |
+|  7 | Reported trade count mismatch                   | `R_DUP_RUN`, `R_BAD_MATH`                 | **FAILURE** — 2 rows                                                                                                      |
+|  8 | Reported total fees mismatch                    | `R_DUP_RUN`, `R_BAD_MATH`                 | **FAILURE** — 2 rows                                                                                                      |
+|  9 | Initial cash vs. `metric_initial_cash` mismatch | `R_BAD_MATH`                              | **FAILURE** — 1 row                                                                                                       |
+| 10 | `total_return_pct` calculation mismatch         | `R_BAD_MATH`                              | **FAILURE** — 1 row; reported `99%`, calculated `300%`                                                                    |
+| 11 | Invalid date range                              | `R_BAD_MATH`                              | **FAILURE** — 1 row                                                                                                       |
+| 12 | Negative fee rate                               | `R_BAD_MATH`                              | **FAILURE** — 1 row; `fee_rate = -0.05`                                                                                   |
+| 13 | Non-positive quantity                           | `R_BAD_MATH`, `seq = 1`                   | **FAILURE** — 1 row; quantity `-5.0`                                                                                      |
+| 14 | Non-positive fill price                         | `R_BAD_MATH`, `seq = 1`                   | **FAILURE** — 1 row; fill price `-10.0`                                                                                   |
+| 15 | Missing `initial_cash`                          | `R_NULLS`                                 | **FAILURE** — 1 row                                                                                                       |
+| 16 | Missing `metric_initial_cash`                   | `R_NULLS`                                 | **FAILURE** — 1 row                                                                                                       |
+| 17 | Missing `reported_num_trades`                   | `R_NULLS`                                 | **FAILURE** — 1 row                                                                                                       |
+| 18 | Missing `total_fees`                            | `R_NULLS`                                 | **FAILURE** — 1 row                                                                                                       |
+| 19 | Missing `final_equity`                          | `R_NULLS`                                 | **FAILURE** — 1 row                                                                                                       |
+| 20 | Missing `timeframe`                             | `R_NULLS`                                 | **FAILURE** — 1 row                                                                                                       |
+| 21 | Missing `num_bars_processed`                    | `R_NULLS`                                 | **FAILURE** — 1 row                                                                                                       |
+| 22 | Missing `total_return_pct`                      | `R_NULLS`                                 | **FAILURE** — 1 row                                                                                                       |
+| 23 | Non-positive `metric_initial_cash`              | `R_ZERO_CASH`                             | **FAILURE** — 1 row; value `0.0`                                                                                          |
+| 24 | Zero actual trades                              | `R_ZERO_FILL`, `R_NULLS`                  | **INFORMATIONAL** — 2 rows                                                                                                |
+| 25 | Negative fitness                                | `C_BAD_FIT`                               | **FAILURE** — 1 row; fitness `-5.0`                                                                                       |
+| 26 | Global return summary                           | All runs with non-null `total_return_pct` | **INFORMATIONAL** — 1 aggregate row                                                                                       |
+| 27 | Invalid `num_bars_processed`                    | `R_BAD_MATH`, `R_NULLS`                   | **FAILURE** — 2 rows                                                                                                      |
+| 28 | Unsupported timeframe                           | `R_BAD_MATH`, `R_BAD_TF`, `R_NULLS`       | **FAILURE** — 3 rows                                                                                                      |
+| 29 | Non-crypto annualization                        | `R_NONCRYPTO_CONTROL`                     | **INFORMATIONAL** — 1 row; exchange-calendar factor is not supplied                                                       |
+| 30 | Crypto annualized return mismatch               | `R_ANN_ERR`                               | **FAILURE** — 1 row; reported `99.9%`, calculated `10.0%`                                                                 |
 
 ---
 
@@ -63,10 +63,10 @@ The validation queries deliberately separate **missing values** from
 
 The validation layer intentionally distinguishes between:
 
-- **missing data** (`NULL`)
-- **explicit zero**
-- **explicit invalid values**
-- **inconsistent values**
+* **missing data** (`NULL`)
+* **explicit zero**
+* **explicit invalid values**
+* **inconsistent values**
 
 For example, `R_NULLS` has a missing `reported_num_trades`.
 
@@ -78,16 +78,16 @@ It is **not** treated as a trade-count mismatch by Query 7.
 
 The same principle applies to the other required fields:
 
-| Field | Missing-value check |
-|---|---:|
-| `initial_cash` | Query 15 |
-| `metric_initial_cash` | Query 16 |
-| `reported_num_trades` | Query 17 |
-| `total_fees` | Query 18 |
-| `final_equity` | Query 19 |
-| `timeframe` | Query 20 |
-| `num_bars_processed` | Query 21 |
-| `total_return_pct` | Query 22 |
+| Field                 | Missing-value check |
+| --------------------- | ------------------: |
+| `initial_cash`        |            Query 15 |
+| `metric_initial_cash` |            Query 16 |
+| `reported_num_trades` |            Query 17 |
+| `total_fees`          |            Query 18 |
+| `final_equity`        |            Query 19 |
+| `timeframe`           |            Query 20 |
+| `num_bars_processed`  |            Query 21 |
+| `total_return_pct`    |            Query 22 |
 
 This prevents the validation layer from interpreting **missing data as zero**.
 
@@ -99,31 +99,31 @@ This prevents the validation layer from interpreting **missing data as zero**.
 
 It should **not** appear in the failure results for:
 
-- trade-count validation
-- total-fee validation
-- initial-cash consistency
-- total-return calculation
-- date-range validation
-- fee-rate validation
-- quantity validation
-- fill-price validation
-- crypto annualization validation
+* trade-count validation
+* total-fee validation
+* initial-cash consistency
+* total-return calculation
+* date-range validation
+* fee-rate validation
+* quantity validation
+* fill-price validation
+* crypto annualization validation
 
 ### Control Values
 
-| Field | Value |
-|---|---:|
-| `reported_num_trades` | `2` |
-| Actual trade rows | `2` |
-| `total_fees` | `2.00` |
-| Actual fees | `2.00` |
-| `initial_cash` | `10000.50` |
-| `metric_initial_cash` | `10000.50` |
-| `final_equity` | `11000.55` |
-| `total_return_pct` | `10.0%` |
-| `timeframe` | `1d` |
-| `num_bars_processed` | `365` |
-| `annualized_return_pct` | `10.0%` |
+| Field                   |      Value |
+| ----------------------- | ---------: |
+| `reported_num_trades`   |        `2` |
+| Actual trade rows       |        `2` |
+| `total_fees`            |     `2.00` |
+| Actual fees             |     `2.00` |
+| `initial_cash`          | `10000.50` |
+| `metric_initial_cash`   | `10000.50` |
+| `final_equity`          | `11000.55` |
+| `total_return_pct`      |    `10.0%` |
+| `timeframe`             |       `1d` |
+| `num_bars_processed`    |      `365` |
+| `annualized_return_pct` |    `10.0%` |
 
 ### Total Return
 
@@ -149,20 +149,20 @@ Therefore the reported `10.0%` passes the validation.
 
 ## Annualization Validation
 
-The fixture contains both a crypto control and a non-crypto control.
+The fixture contains both a crypto control using `binance` and a non-crypto control using `baostock`.
 
 ### Crypto Annualization
 
-`R_VALID` uses:
+`R_VALID` uses the project crypto venue `binance`:
 
-| Field | Value |
-|---|---:|
-| Venue | `crypto` |
-| Timeframe | `1d` |
-| Bars processed | `365` |
-| Total return | `10.0%` |
-| Annualized return | `10.0%` |
-| Annualization factor | `365` |
+| Field                |     Value |
+| -------------------- | --------: |
+| Venue                | `binance` |
+| Timeframe            |      `1d` |
+| Bars processed       |     `365` |
+| Total return         |   `10.0%` |
+| Annualized return    |   `10.0%` |
+| Annualization factor |     `365` |
 
 The validation convention is **linear annualization**, not CAGR:
 
@@ -183,15 +183,15 @@ Therefore:
 
 ### Non-Crypto Annualization
 
-`R_NONCRYPTO_CONTROL` uses:
+`R_NONCRYPTO_CONTROL` uses the non-crypto venue `baostock`:
 
-| Field | Value |
-|---|---:|
-| Venue | `NSE` |
-| Timeframe | `1d` |
-| Bars processed | `252` |
-| Total return | `10.0%` |
-| Annualized return | `10.0%` |
+| Field             |      Value |
+| ----------------- | ---------: |
+| Venue             | `baostock` |
+| Timeframe         |       `1d` |
+| Bars processed    |      `252` |
+| Total return      |    `10.0%` |
+| Annualized return |    `10.0%` |
 
 The validation logic **does not apply the crypto `365` factor** to this run.
 
@@ -209,21 +209,21 @@ the annualized return for a non-crypto market.
 The synthetic fixture contains specific rows designed to exercise individual
 validation conditions.
 
-| Synthetic Row | Purpose |
-|---|---|
-| `C_DUP` | Duplicate candidate key |
-| `R_DUP_RUN` | Duplicate run key and inconsistent reported trade count / fees |
-| `R_DUP_TRADE` | Duplicate `(run_key, seq)` trade key |
-| `R_ORPHAN` | Run references a missing candidate |
-| `R_MISSING_RUN` | Trade references a missing run |
-| `R_BAD_MATH` | Multiple intentionally invalid numeric and temporal fields |
-| `R_BAD_TF` | Unsupported timeframe |
-| `R_NULLS` | Missing required run-level fields |
-| `R_ZERO_CASH` | Non-positive `metric_initial_cash` |
-| `R_ZERO_FILL` | Run with zero actual trade rows |
-| `R_ANN_ERR` | Incorrect crypto annualized return |
-| `R_NONCRYPTO_CONTROL` | Non-crypto annualization control case |
-| `C_BAD_FIT` | Negative fitness |
+| Synthetic Row         | Purpose                                                                |
+| --------------------- | ---------------------------------------------------------------------- |
+| `C_DUP`               | Duplicate candidate key                                                |
+| `R_DUP_RUN`           | Duplicate run key and inconsistent reported trade count / fees         |
+| `R_DUP_TRADE`         | Duplicate `(run_key, seq)` trade key                                   |
+| `R_ORPHAN`            | Run references a missing candidate                                     |
+| `R_MISSING_RUN`       | Trade references a missing run                                         |
+| `R_BAD_MATH`          | Multiple intentionally invalid numeric and temporal fields             |
+| `R_BAD_TF`            | Unsupported timeframe                                                  |
+| `R_NULLS`             | Missing required run-level fields                                      |
+| `R_ZERO_CASH`         | Non-positive `metric_initial_cash`                                     |
+| `R_ZERO_FILL`         | Run with zero actual trade rows                                        |
+| `R_ANN_ERR`           | Incorrect crypto annualized return using the `binance` 24/7 convention |
+| `R_NONCRYPTO_CONTROL` | Non-crypto annualization control case                                  |
+| `C_BAD_FIT`           | Negative fitness                                                       |
 
 ---
 
@@ -234,14 +234,14 @@ validation conditions.
 The first six checks validate the relationships between candidates, backtest
 runs, and trades.
 
-The expected failures are:
+The expected results are:
 
-- duplicate candidate: `C_DUP`
-- duplicate run: `R_DUP_RUN`
-- duplicate trade key: `R_DUP_TRADE`
-- candidate without run: `C_DUP`, `C_ORPHAN`, `C_BAD_FIT`
-- run without candidate: `R_ORPHAN`
-- trade without run: `R_MISSING_RUN`
+* duplicate candidate: `C_DUP`
+* duplicate run: `R_DUP_RUN`
+* duplicate trade key: `R_DUP_TRADE`
+* candidate without run: `C_DUP`, `C_ORPHAN`, `C_BAD_FIT` — informational
+* run without candidate: `R_ORPHAN`
+* trade without run: `R_MISSING_RUN`
 
 These checks establish basic referential and uniqueness integrity before
 performing metric-level validation.
@@ -253,12 +253,12 @@ underlying trade data or related run fields.
 
 Expected failures include:
 
-- `R_DUP_RUN` — reported trade count does not match actual fills
-- `R_DUP_RUN` — reported fees do not match actual fees
-- `R_BAD_MATH` — reported trade count does not match actual fills
-- `R_BAD_MATH` — reported fees do not match actual fees
-- `R_BAD_MATH` — `initial_cash` differs from `metric_initial_cash`
-- `R_BAD_MATH` — reported total return differs from the calculated value
+* `R_DUP_RUN` — reported trade count does not match actual fills
+* `R_DUP_RUN` — reported fees do not match actual fees
+* `R_BAD_MATH` — reported trade count does not match actual fills
+* `R_BAD_MATH` — reported fees do not match actual fees
+* `R_BAD_MATH` — `initial_cash` differs from `metric_initial_cash`
+* `R_BAD_MATH` — reported total return differs from the calculated value
 
 Missing values are handled separately by the required-field checks.
 
@@ -268,14 +268,14 @@ Missing values are handled separately by the required-field checks.
 
 The expected result is one failure from each applicable missing-field query:
 
-- `initial_cash`
-- `metric_initial_cash`
-- `reported_num_trades`
-- `total_fees`
-- `final_equity`
-- `timeframe`
-- `num_bars_processed`
-- `total_return_pct`
+* `initial_cash`
+* `metric_initial_cash`
+* `reported_num_trades`
+* `total_fees`
+* `final_equity`
+* `timeframe`
+* `num_bars_processed`
+* `total_return_pct`
 
 This produces **8 missing-field validation results**.
 
@@ -286,8 +286,8 @@ automatically classified as failures.
 
 Expected rows:
 
-- `R_ZERO_FILL`
-- `R_NULLS`
+* `R_ZERO_FILL`
+* `R_NULLS`
 
 A zero-fill run may be legitimate depending on the strategy and test period,
 so the validation layer surfaces it for review rather than declaring it invalid.
