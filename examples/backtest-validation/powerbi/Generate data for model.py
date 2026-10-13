@@ -249,6 +249,18 @@ def generate_powerbi_dataset():
     os.makedirs(output_dir)
 
     # Write DataFrames safely to the new directory
+    # Generate an isolated exceptions dataset
+    exceptions = [{
+        "run_key": "R002",
+        "seq": 4, # Points to a specific trade
+        "check_name": "pnl_calculation_check",
+        "status": "failed",
+        "details": "P&L mismatch detected: expected 42.0, actual 44.1"
+    }]
+    e_df = pd.DataFrame(exceptions)
+    
+    # Save the files
+    e_df.to_csv(os.path.join(output_dir, "validation_exceptions.csv"), index=False)
     c_df.to_csv(os.path.join(output_dir, "candidates.csv"), index=False)
     r_df.to_csv(os.path.join(output_dir, "backtest_runs.csv"), index=False)
     t_df.to_csv(os.path.join(output_dir, "backtest_trades.csv"), index=False)
