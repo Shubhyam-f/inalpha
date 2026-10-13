@@ -115,15 +115,22 @@ def generate_powerbi_dataset():
             worst_pnl = min(all_realized) if all_realized else 0.0
             
             # Fix Run-Duration Inconsistency
-            from_dt = datetime.strptime(run_trades[0]['bar_ts_utc'], '%Y-%m-%dT%H:%M:%SZ')
-            to_dt = datetime.strptime(run_trades[-1]['bar_ts_utc'], '%Y-%m-%dT%H:%M:%SZ')
-            run_duration_days = (to_dt - from_dt).total_seconds() / 86400.0
-            if run_duration_days <= 0:
-                run_duration_days = 1.0 # Safety fallback to avoid division by zero
+           # Inalpha's exact linear annualization math
+            num_bars = 1000 + (global_run_counter * 100)
+            
+            if config['venue'] == 'binance':
+                if config['timeframe'] == '1h':
+                    bars_per_year = 365 * 24
+                elif config['timeframe'] == '4h':
+                    bars_per_year = 365 * 6
+                else: # '1d'
+                    bars_per_year = 365
+            else: # 'baostock'
+                bars_per_year = 252
                 
-            # Synthetic annualization calculation (not intended to imply universal venue conventions)
-            annualization_factor = 365.0 if config['venue'] == 'binance' else 252.0
-            annualized_return_pct = ret_pct * (annualization_factor / run_duration_days)
+            annualized_return_pct = ret_pct * (bars_per_year / num_bars)
+                
+            
             
             runs.append({
                 'run_key': run_key,
@@ -138,7 +145,7 @@ def generate_powerbi_dataset():
                 'initial_cash': initial_cash,
                 'fee_rate': 0.001,
                 'params_json': json.dumps({"risk": 0.02, "sl": 0.05}),
-                'num_bars_processed': 1000 + (global_run_counter * 100),
+                'num_bars_processed': num_bars,
                 'reported_num_trades': num_trades,
                 'metric_initial_cash': initial_cash,
                 'final_equity': round(final_eq, 2),
