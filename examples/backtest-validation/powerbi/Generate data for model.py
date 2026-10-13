@@ -234,10 +234,24 @@ def generate_powerbi_dataset():
     assert len(r_df) == 10, f"Validation Failed: Expected 10 runs, got {len(r_df)}"
     assert len(t_df) == 100, f"Validation Failed: Expected 100 trades, got {len(t_df)}"
 
-    # Write DataFrames directly to CSV
-    c_df.to_csv("candidates.csv", index=False)
-    r_df.to_csv("backtest_runs.csv", index=False)
-    t_df.to_csv("backtest_trades.csv", index=False)
+    
+    import os
+    import sys
+
+    output_dir = "fixture_output"
+    
+    # Overwrite protection
+    if os.path.exists(output_dir):
+        print(f"Error: The directory '{output_dir}' already exists.")
+        print("Please delete or rename it to prevent overwriting existing data.")
+        sys.exit(1)
+        
+    os.makedirs(output_dir)
+
+    # Write DataFrames safely to the new directory
+    c_df.to_csv(os.path.join(output_dir, "candidates.csv"), index=False)
+    r_df.to_csv(os.path.join(output_dir, "backtest_runs.csv"), index=False)
+    t_df.to_csv(os.path.join(output_dir, "backtest_trades.csv"), index=False)
 
     print("Power BI synthetic dataset generated successfully.\n")
     print("candidates.csv: 5 rows")
