@@ -131,6 +131,7 @@ The expected total return is:
 
 $$
 \text{Total Return \%}
+$$
 =
 \frac{\text{final\_equity} - \text{metric\_initial\_cash}}
 {\text{metric\_initial\_cash}}
