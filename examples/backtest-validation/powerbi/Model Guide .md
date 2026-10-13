@@ -189,9 +189,8 @@ Create a new measure in Power BI.
 
 The measure is:
 
-    Realised pnl =
-        backtest_runs[metric_initial_cash]
-        - backtest_runs[final_equity]
+   Total Gross Realized P&L =
+SUM(backtest_trades[realized_pnl])
 
 This measure is used as the primary value for the lineage/decomposition analysis.
 
