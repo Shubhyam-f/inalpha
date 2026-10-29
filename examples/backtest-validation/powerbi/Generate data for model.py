@@ -1,8 +1,20 @@
+import os
+import sys
 import pandas as pd
 from datetime import datetime, timedelta
 import json
 
 def generate_powerbi_dataset():
+    output_dir = "fixture_output"
+    
+    # Overwrite protection
+    if os.path.exists(output_dir):
+        print(f"Error: The directory '{output_dir}' already exists.")
+        print("Please delete or rename it to prevent overwriting existing data.")
+        sys.exit(1)
+        
+    os.makedirs(output_dir)
+
     # 1. Clean Instrument / Venue / Timeframe Mapping
     configs = [
         {"symbol": "BTC/USDT", "timeframe": "1h", "venue": "binance", "strategy_kind": "trend_following"},
@@ -101,9 +113,14 @@ def generate_powerbi_dataset():
             trades.extend(run_trades)
             
             # Run roll-up calculations derived strictly from the generated trade rows
-            # final_equity = initial_cash + total gross realized P&L - total fees
             total_pnl = sum([t['realized_pnl'] for t in run_trades])
-            final_eq = initial_cash + total_pnl - run_fees
+            expected_final_eq = initial_cash + total_pnl - run_fees
+            final_eq = expected_final_eq
+            
+            # INJECT DELIBERATE EQUITY FAILURE FOR R002
+            if run_key == "R002":
+                final_eq += 50.0 
+                
             ret_pct = (final_eq - initial_cash) / initial_cash * 100
             
             # Metrics based on actual non-zero realized_pnl values
@@ -114,8 +131,7 @@ def generate_powerbi_dataset():
             best_pnl = max(all_realized) if all_realized else 0.0
             worst_pnl = min(all_realized) if all_realized else 0.0
             
-            # Fix Run-Duration Inconsistency
-           # Inalpha's exact linear annualization math
+            # Inalpha's exact linear annualization math
             num_bars = 1000 + (global_run_counter * 100)
             
             if config['venue'] == 'binance':
@@ -129,8 +145,6 @@ def generate_powerbi_dataset():
                 bars_per_year = 252
                 
             annualized_return_pct = ret_pct * (bars_per_year / num_bars)
-                
-            
             
             runs.append({
                 'run_key': run_key,
@@ -149,14 +163,14 @@ def generate_powerbi_dataset():
                 'reported_num_trades': num_trades,
                 'metric_initial_cash': initial_cash,
                 'final_equity': round(final_eq, 2),
-                'total_return_pct': round(ret_pct, 4),
+                'total_return_pct': round(ret_pct, 6),
                 
                 # -------------------------------------------------------------------------
                 # NOTE: The following fields are synthetic representative values for the 
                 # clean Power BI fixture. They are NOT independently reconstructed from an 
                 # equity curve and are NOT intended to serve as independent validation evidence.
                 # -------------------------------------------------------------------------
-                'annualized_return_pct': round(annualized_return_pct, 4),
+                'annualized_return_pct': round(annualized_return_pct, 6),
                 'annualized_volatility_pct': 15.0 + global_run_counter,
                 'max_drawdown_pct': -5.0 - (global_run_counter * 0.5),
                 'sharpe': round(1.0 + (global_run_counter * 0.1), 2),
@@ -175,7 +189,7 @@ def generate_powerbi_dataset():
                 'max_drawdown_duration_bars': 20 + global_run_counter,
                 'fitness': round(1.0 + (global_run_counter * 0.2), 2),
                 
-                'validation_json': json.dumps({"passed": True}),
+                'validation_json': json.dumps({"structural_checks_passed": True, "metrics_validated": False}),
                 'created_at_utc': '2023-01-01T10:00:00Z',
                 'updated_at_utc': '2023-01-02T10:00:00Z'
             })
@@ -191,22 +205,12 @@ def generate_powerbi_dataset():
     # Automated Validation Section
     # ==================================================
     
-    # 1. candidate_key uniqueness
     assert c_df['candidate_key'].is_unique, "Validation Failed: candidate_key is not unique."
-    
-    # 2. run_key uniqueness
     assert r_df['run_key'].is_unique, "Validation Failed: run_key is not unique."
-    
-    # 3. candidate foreign-key integrity
     assert set(r_df['candidate_key']).issubset(set(c_df['candidate_key'])), "Validation Failed: Orphan backtest_runs found."
-    
-    # 4. trade run_key foreign-key integrity
     assert set(t_df['run_key']).issubset(set(r_df['run_key'])), "Validation Failed: Orphan backtest_trades found."
-    
-    # 5. (run_key, seq) uniqueness
     assert t_df.duplicated(subset=['run_key', 'seq']).sum() == 0, "Validation Failed: (run_key, seq) is not unique."
     
-    # 6 & 7. Every run has exactly 10 trades & reported_num_trades equals actual trade count
     trade_counts = t_df.groupby('run_key').size()
     for _, run_row in r_df.iterrows():
         r_key = run_row['run_key']
@@ -214,48 +218,27 @@ def generate_powerbi_dataset():
         assert actual_count == 10, f"Validation Failed: {r_key} has {actual_count} trades instead of 10."
         assert run_row['reported_num_trades'] == actual_count, f"Validation Failed: {r_key} reported_num_trades does not match actual count."
 
-    # 8. last_backtest_run_key resolves to an existing run belonging to that candidate
     for _, cand_row in c_df.iterrows():
         c_key = cand_row['candidate_key']
         last_r_key = cand_row['last_backtest_run_key']
         assert last_r_key in r_df['run_key'].values, f"Validation Failed: last_backtest_run_key {last_r_key} for {c_key} does not exist."
-        
-        # Verify it actually belongs to the candidate that owns it
         cand_runs = r_df[r_df['candidate_key'] == c_key]['run_key'].values
         assert last_r_key in cand_runs, f"Validation Failed: {last_r_key} does not belong to candidate {c_key}."
 
-    # 9. Required Power BI fields contain no nulls
     assert c_df.notnull().all().all(), "Validation Failed: Null values detected in candidates."
     assert r_df.notnull().all().all(), "Validation Failed: Null values detected in backtest_runs."
     assert t_df.notnull().all().all(), "Validation Failed: Null values detected in backtest_trades."
     
-    # 10. All generated CSVs have the expected row counts
     assert len(c_df) == 5, f"Validation Failed: Expected 5 candidates, got {len(c_df)}"
     assert len(r_df) == 10, f"Validation Failed: Expected 10 runs, got {len(r_df)}"
     assert len(t_df) == 100, f"Validation Failed: Expected 100 trades, got {len(t_df)}"
 
-    
-    import os
-    import sys
-
-    output_dir = "fixture_output"
-    
-    # Overwrite protection
-    if os.path.exists(output_dir):
-        print(f"Error: The directory '{output_dir}' already exists.")
-        print("Please delete or rename it to prevent overwriting existing data.")
-        sys.exit(1)
-        
-    os.makedirs(output_dir)
-
-    # Write DataFrames safely to the new directory
-    # Generate an isolated exceptions dataset
+    # Generate an isolated exceptions dataset with a real math mismatch
     exceptions = [{
         "run_key": "R002",
-        "seq": 4, # Points to a specific trade
-        "check_name": "pnl_calculation_check",
+        "check_name": "equity_consistency_check",
         "status": "failed",
-        "details": "P&L mismatch detected: expected 42.0, actual 44.1"
+        "details": "Equity mismatch detected: expected 12117.65, actual 12167.65"
     }]
     e_df = pd.DataFrame(exceptions)
     
@@ -265,10 +248,11 @@ def generate_powerbi_dataset():
     r_df.to_csv(os.path.join(output_dir, "backtest_runs.csv"), index=False)
     t_df.to_csv(os.path.join(output_dir, "backtest_trades.csv"), index=False)
 
-    print("Power BI synthetic dataset generated successfully.\n")
+    print(f"Power BI synthetic dataset generated successfully in '{output_dir}/'.\n")
     print("candidates.csv: 5 rows")
     print("backtest_runs.csv: 10 rows")
-    print("backtest_trades.csv: 100 rows\n")
+    print("backtest_trades.csv: 100 rows")
+    print("validation_exceptions.csv: 1 row\n")
     print("All relational integrity checks passed.")
 
 if __name__ == "__main__":
