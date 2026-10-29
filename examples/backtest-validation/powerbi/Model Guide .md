@@ -7,7 +7,7 @@ The prototype consists of:
 1. Generating the synthetic datasets.
 2. Importing the generated CSV datasets into Power BI.
 3. Building the relational data model.
-4. Creating the Realised PnL measure.
+4. Creating the Realised PnL measure & Net Equity Change tracking.
 5. Creating the lineage/decomposition-tree dashboard.
 6. Configuring tooltips and drill-through.
 7. Creating the run-performance dashboard.
@@ -77,7 +77,9 @@ Create a relationship between:
 Create a relationship between:
 `backtest_runs[run_key]` and `validation_exceptions[run_key]`
 - **Cardinality:** One-to-many (1:*) or One-to-one (1:1)
-- The `backtest_runs` table is the one side and `validation_exceptions` is the many side.
+- The `backtest_runs` table is the one side and `validation_exceptions` is the many side. 
+
+*Note: Older documentation (`DATA_MODEL.md`) may incorrectly reference `backtest_trades[run_key]` as the drill-through anchor. Always use `backtest_runs[run_key]` to ensure bidirectional filtering compatibility.*
 
 ### 3.4 Model Structure
 The final model should visually represent:
@@ -100,14 +102,16 @@ The final model should visually represent:
 
 ---
 
-## 4. Creating the Realised PnL Measure
-Create a new measure in Power BI.
-The measure is:
+## 4. Creating the Core Measures
+Create the following new measures in Power BI:
+
+**1. Gross Realized P&L:**
 `Total Gross Realized P&L = SUM(backtest_trades[realized_pnl])`
+*This measure is used as the primary value for the lineage/decomposition analysis.*
 
-This measure is used as the primary value for the lineage/decomposition analysis. 
-
-*Note: The guide requires the fill-level SUM consistently throughout the visuals to accurately represent Gross Realized P&L. If you need to show the net equity change (which factors in fees), subtract `final_equity` from `metric_initial_cash`, but label it separately as "Net Equity Change."*
+**2. Net Equity Change:**
+`Net Equity Change = SUM(backtest_runs[final_equity]) - SUM(backtest_runs[metric_initial_cash])`
+*This factors in fees and initial cash layouts. It must remain visually separate from Gross Realized P&L.*
 
 ---
 
@@ -148,7 +152,7 @@ On the run-performance page, enable:
 
 Add the drill-through fields:
 - `candidate_key`
-- `run_key`
+- `backtest_runs[run_key]`
 - `symbol`
 - `timeframe`
 
@@ -168,7 +172,7 @@ It contains:
 ## 9. Dashboard KPI Cards
 Configure the following KPI cards:
 - **Candidate Key:** `candidates[candidate_key]`
-- **Run Key:** `backtest_trades[run_key]`
+- **Run Key:** `backtest_runs[run_key]`
 - **Total Gross Realised PnL:** Measure created in Section 4.
 - **Total Fee:** `backtest_runs[total_fees]`
 - **Total Fills:** `backtest_runs[reported_num_trades]` (rename visual label to "Total Fills")
@@ -213,15 +217,15 @@ Workflow:
 ## 21. Exception Inspection Workflow
 To ensure auditability, the dashboard allows operators to track SQL validation failures directly to the affected records without polluting the primary 1:* relational model.
 
-**Test Case: P&L Mismatch**
-The `validation_exceptions.csv` dataset contains a deliberate failure for run `R002`.
+**Test Case: Equity Consistency Mismatch**
+The `validation_exceptions.csv` dataset contains a deliberate mathematical failure for run `R002`.
 
 **Steps to Inspect:**
-1. Navigate to the **Exceptions Table** (create a basic table visual on the main page using `validation_exceptions` fields).
-2. Locate the failed record for `run_key` = `R002`. The table will display the check (`pnl_calculation_check`) and the error details (`P&L mismatch detected: expected 42.0, actual 44.1`).
-3. Right-click the `R002` row in the Exceptions Table and select **Drill through -> Run Performance Dashboard**.
-4. The destination page will automatically filter to `R002`.
-5. Inspect the trade table on the Run Performance Dashboard, looking specifically at `seq` 4 to identify the exact fill where the math discrepancy occurred.
+1. Navigate to the **Exceptions Table** (create a basic table visual on the main page).
+2. **Crucial Configuration:** Ensure you pull `run_key` from the `backtest_runs` table (`backtest_runs[run_key]`), NOT from `validation_exceptions`, to satisfy Power BI's cross-table drill-through requirements. Pull `check_name`, `status`, and `details` from `validation_exceptions`.
+3. Locate the failed record for `run_key` = `R002`. The table will display the check (`equity_consistency_check`) and the error details (`Equity mismatch detected: expected 12117.65, actual 12167.65`).
+4. Right-click the `R002` row in the Exceptions Table and select **Drill through -> Run Performance Dashboard**.
+5. The destination page will automatically filter to `R002`. Inspect the trade table and KPI cards on the Run Performance Dashboard to identify the mathematical discrepancy.
 
 ---
 
@@ -229,9 +233,11 @@ The `validation_exceptions.csv` dataset contains a deliberate failure for run `R
 To verify the model is working correctly, confirm the following values in your Power BI visuals:
 
 - **R001 Expected Values:** Gross Realized P&L = +107.10.
-- **Candidate-filter check:** Filtering by `C001` should show exactly 2 runs.
+- **R001 Net Equity Change:** +105.87.
+- **All runs gross realized P&L:** +1,300.50.
+- **Candidate-filter check:** Filtering by `C001` should show exactly 2 runs and a gross realized P&L of +219.30.
 - **Run drill-through check:** Drilling through `R001` should display exactly 10 fills/trades.
-- **Exception-inspection check:** `R002` should successfully display the `pnl_calculation_check` failure and trace directly to `seq` 4.
+- **Exception-inspection check:** `R002` should successfully display the `equity_consistency_check` failure and trace directly to the detail view via `backtest_runs[run_key]`.
 
 **Verification Status:**
 - Python/SQL generation steps: **Verified**
