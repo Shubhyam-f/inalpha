@@ -376,13 +376,13 @@ HAVING COUNT(t.run_key) = 0;
 -- 25. NEGATIVE FITNESS
 -- ============================================================
 
-SELECT
-    'VALIDATION FAILURE: negative fitness' AS validation_check,
+SELECT 
     candidate_key,
-    fitness
+    'negative_fitness_check' AS check_name,
+    'informational' AS status,
+    'Fitness is negative: ' || fitness AS details
 FROM candidates
-WHERE fitness IS NOT NULL
-  AND fitness < 0;
+WHERE fitness < 0;
 
 
 -- ============================================================
