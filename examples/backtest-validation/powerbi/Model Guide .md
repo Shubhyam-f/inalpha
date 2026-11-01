@@ -218,12 +218,13 @@ Workflow:
 To ensure auditability, the dashboard allows operators to track SQL validation failures directly to the affected records without polluting the primary 1:* relational model.
 
 **Test Case: Equity Consistency Mismatch**
-The `validation_exceptions.csv` dataset contains a deliberate mathematical failure for run `R002`.
+The `validation_exceptions.csv` dataset contains a deliberate mathematical failure for run `R002`. 
+*(Note: The equity identity logic here strictly assumes 0 unrealized P&L, which aligns with the synthetic fixture's design assumptions. It is not generally valid for portfolios carrying open positions).*
 
 **Steps to Inspect:**
 1. Navigate to the **Exceptions Table** (create a basic table visual on the main page).
 2. **Crucial Configuration:** Ensure you pull `run_key` from the `backtest_runs` table (`backtest_runs[run_key]`), NOT from `validation_exceptions`, to satisfy Power BI's cross-table drill-through requirements. Pull `check_name`, `status`, and `details` from `validation_exceptions`.
-3. Locate the failed record for `run_key` = `R002`. The table will display the check (`equity_consistency_check`) and the error details (`Equity mismatch detected: expected 12117.65, actual 12167.65`).
+3. Locate the failed record for `run_key` = `R002`. The table will display the check (`equity_consistency_check`) and the error details (`Equity mismatch detected: expected 12110.87, actual 12160.87`).
 4. Right-click the `R002` row in the Exceptions Table and select **Drill through -> Run Performance Dashboard**.
 5. The destination page will automatically filter to `R002`. Inspect the trade table and KPI cards on the Run Performance Dashboard to identify the mathematical discrepancy.
 
