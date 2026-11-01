@@ -371,9 +371,23 @@ LEFT JOIN backtest_trades t
 GROUP BY r.run_key
 HAVING COUNT(t.run_key) = 0;
 
+-- Query 25: Equity Consistency Check
+-- Validates final_equity against realized P&L and fees. 
+-- Scoped strictly to the synthetic fixture's assumption of zero unrealized P&L.
+SELECT 
+    r.run_key,
+    'equity_consistency_check' AS check_name,
+    'failed' AS status,
+    'Equity mismatch detected: expected ' || 
+    ROUND(r.initial_cash + COALESCE(SUM(t.realized_pnl), 0) - COALESCE(SUM(t.fee), 0), 2) || 
+    ', actual ' || r.final_equity AS details
+FROM backtest_runs r
+LEFT JOIN backtest_trades t ON r.run_key = t.run_key
+GROUP BY r.run_key
+HAVING ROUND(r.initial_cash + COALESCE(SUM(t.realized_pnl), 0) - COALESCE(SUM(t.fee), 0), 2) <> r.final_equity;
 
 -- ============================================================
--- 25. NEGATIVE FITNESS
+-- 26. NEGATIVE FITNESS
 -- ============================================================
 
 SELECT 
@@ -386,7 +400,7 @@ WHERE fitness < 0;
 
 
 -- ============================================================
--- 26. GLOBAL RETURN SUMMARY
+-- 27. GLOBAL RETURN SUMMARY
 --
 -- Informational aggregate.
 -- ============================================================
@@ -401,7 +415,7 @@ WHERE total_return_pct IS NOT NULL;
 
 
 -- ============================================================
--- 27. INVALID NUMBER OF PROCESSED BARS
+-- 28. INVALID NUMBER OF PROCESSED BARS
 -- ============================================================
 
 SELECT
@@ -414,7 +428,7 @@ WHERE num_bars_processed IS NULL
 
 
 -- ============================================================
--- 28. UNSUPPORTED TIMEFRAME
+-- 29. UNSUPPORTED TIMEFRAME
 --
 -- Supported crypto annualization factors are defined below.
 -- NULL is also surfaced here because annualization cannot be
@@ -447,7 +461,7 @@ WHERE timeframe IS NULL
 
 
 -- ============================================================
--- 29. NON-CRYPTO ANNUALIZATION
+-- 30. NON-CRYPTO ANNUALIZATION
 --
 -- Within this validation scope, binance is the crypto venue
 -- treated as 24/7. Other venues require the applicable
@@ -476,7 +490,7 @@ WHERE LOWER(COALESCE(venue, '')) <> 'binance'
 
 
 -- ============================================================
--- 30. CRYPTO ANNUALIZED RETURN MISMATCH
+-- 31. CRYPTO ANNUALIZED RETURN MISMATCH
 --
 -- Within this validation scope, binance is the crypto venue
 -- treated as 24/7.
